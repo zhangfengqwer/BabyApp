@@ -1,0 +1,12 @@
+.idea/
+.gradle/
+**/build/
+**/local.properties
+**/node_modules/
+**/dist/
+**/dist-seed/
+**/.env
+*.log
+android-build-exit.txt
+scripts/.state/
+.DS_Store

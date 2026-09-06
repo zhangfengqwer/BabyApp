@@ -1,0 +1,10 @@
+{
+  "name": "baby-home",
+  "private": true,
+  "workspaces": ["apps/backend"],
+  "scripts": {
+    "backend:build": "npm --workspace apps/backend run build",
+    "backend:test": "npm --workspace apps/backend run test",
+    "backend:start:dev": "npm --workspace apps/backend run start:dev"
+  }
+}

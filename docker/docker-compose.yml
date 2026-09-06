@@ -1,0 +1,57 @@
+name: baby-home
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-baby_home}
+      POSTGRES_USER: ${POSTGRES_USER:-baby_home}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在根目录 .env 中设置 POSTGRES_PASSWORD}
+    volumes:
+      - baby_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - baby_internal
+
+  backend:
+    image: baby-home-backend:latest
+    build:
+      context: ..
+      dockerfile: apps/backend/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: 8080
+      DATABASE_URL: ${DATABASE_URL:-postgresql://baby_home:change-me@postgres:5432/baby_home?schema=public}
+      IMMICH_BASE_URL: ${IMMICH_BASE_URL:-http://host.docker.internal:2283}
+      IMMICH_API_KEY: ${IMMICH_API_KEY:-}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?请在根目录 .env 中设置 JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?请在根目录 .env 中设置 JWT_REFRESH_SECRET}
+      HOME_ACCESS_KEY: ${HOME_ACCESS_KEY:?请在根目录 .env 中设置 HOME_ACCESS_KEY}
+      JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-900}
+      JWT_REFRESH_TTL_SECONDS: ${JWT_REFRESH_TTL_SECONDS:-2592000}
+      INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-admin}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      INITIAL_ADMIN_NICKNAME: ${INITIAL_ADMIN_NICKNAME:-管理员}
+      INITIAL_BABY_NAME: ${INITIAL_BABY_NAME:-}
+      INITIAL_BABY_BIRTHDAY: ${INITIAL_BABY_BIRTHDAY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - baby_internal
+
+volumes:
+  baby_postgres_data:
+
+networks:
+  baby_internal:
+    driver: bridge

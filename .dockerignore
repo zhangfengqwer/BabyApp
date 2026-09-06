@@ -1,0 +1,10 @@
+.git
+.idea
+.gradle
+node_modules
+**/node_modules
+**/dist
+**/build
+apps/android
+*.log
+.env

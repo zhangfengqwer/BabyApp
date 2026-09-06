@@ -1,0 +1,28 @@
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/active.conf:/etc/nginx/conf.d/default.conf:ro
+      - baby_certbot_www:/var/www/certbot:ro
+      - baby_letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - backend
+    networks:
+      - baby_internal
+
+  certbot:
+    image: certbot/certbot:v3.2.0
+    profiles: ["certbot"]
+    volumes:
+      - baby_certbot_www:/var/www/certbot
+      - baby_letsencrypt:/etc/letsencrypt
+    networks:
+      - baby_internal
+
+volumes:
+  baby_certbot_www:
+  baby_letsencrypt:

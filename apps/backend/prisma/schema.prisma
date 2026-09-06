@@ -1,0 +1,190 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  PARENT
+  FAMILY
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNSPECIFIED
+}
+
+enum MomentVisibility {
+  FAMILY
+  PARENTS_ONLY
+  PRIVATE
+}
+
+enum AssetType {
+  IMAGE
+  VIDEO
+}
+
+enum MilestoneType {
+  FIRST_SMILE
+  FIRST_ROLLOVER
+  FIRST_CRAWL
+  FIRST_STEP
+  FIRST_WORD
+  FIRST_BIRTHDAY
+  FIRST_SCHOOL
+  CUSTOM
+}
+
+model User {
+  id            String         @id @default(uuid()) @db.Uuid
+  username      String         @unique @db.VarChar(64)
+  nickname      String         @db.VarChar(64)
+  avatar        String?
+  passwordHash  String
+  role          UserRole       @default(FAMILY)
+  familyMembers FamilyMember[]
+  moments       Moment[]
+  comments      Comment[]
+  likes         Like[]
+  refreshTokens RefreshToken[]
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique
+  expiresAt DateTime  @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([userId, expiresAt])
+}
+
+model Baby {
+  id            String         @id @default(uuid()) @db.Uuid
+  name          String         @db.VarChar(64)
+  nickname      String?        @db.VarChar(64)
+  gender        Gender         @default(UNSPECIFIED)
+  birthday      DateTime       @db.Date
+  avatarAssetId String?
+  description   String?
+  familyMembers FamilyMember[]
+  moments       Moment[]
+  growthRecords GrowthRecord[]
+  milestones    Milestone[]
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+}
+
+model FamilyMember {
+  id           String   @id @default(uuid()) @db.Uuid
+  babyId       String   @db.Uuid
+  userId       String   @db.Uuid
+  relationship String   @db.VarChar(32)
+  baby         Baby     @relation(fields: [babyId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([babyId, userId])
+  @@index([userId])
+}
+
+model Moment {
+  id         String           @id @default(uuid()) @db.Uuid
+  babyId     String           @db.Uuid
+  authorId   String           @db.Uuid
+  content    String?
+  eventDate  DateTime         @db.Timestamptz(3)
+  location   String?          @db.VarChar(255)
+  visibility MomentVisibility @default(FAMILY)
+  baby       Baby             @relation(fields: [babyId], references: [id], onDelete: Cascade)
+  author     User             @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  assets     MomentAsset[]
+  comments   Comment[]
+  likes      Like[]
+  createdAt  DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@index([babyId, eventDate(sort: Desc), id])
+  @@index([authorId])
+}
+
+model MomentAsset {
+  id            String    @id @default(uuid()) @db.Uuid
+  momentId      String    @db.Uuid
+  immichAssetId String    @db.Uuid
+  assetType     AssetType
+  sortOrder     Int       @default(0)
+  moment        Moment    @relation(fields: [momentId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@unique([momentId, immichAssetId])
+  @@index([momentId, sortOrder])
+  @@index([immichAssetId])
+}
+
+model Comment {
+  id        String   @id @default(uuid()) @db.Uuid
+  momentId  String   @db.Uuid
+  userId    String   @db.Uuid
+  content   String
+  moment    Moment   @relation(fields: [momentId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([momentId, createdAt])
+  @@index([userId])
+}
+
+model Like {
+  id        String   @id @default(uuid()) @db.Uuid
+  momentId  String   @db.Uuid
+  userId    String   @db.Uuid
+  moment    Moment   @relation(fields: [momentId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([momentId, userId])
+  @@index([userId])
+}
+
+model GrowthRecord {
+  id                  String   @id @default(uuid()) @db.Uuid
+  babyId              String   @db.Uuid
+  recordDate          DateTime @db.Date
+  heightCm            Decimal? @db.Decimal(5, 2)
+  weightKg            Decimal? @db.Decimal(5, 2)
+  headCircumferenceCm Decimal? @db.Decimal(5, 2)
+  note                String?
+  baby                Baby     @relation(fields: [babyId], references: [id], onDelete: Cascade)
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([babyId, recordDate(sort: Desc)])
+}
+
+model Milestone {
+  id           String        @id @default(uuid()) @db.Uuid
+  babyId       String        @db.Uuid
+  title        String        @db.VarChar(128)
+  description  String?
+  eventDate    DateTime      @db.Date
+  type         MilestoneType @default(CUSTOM)
+  coverAssetId String?       @db.Uuid
+  baby         Baby          @relation(fields: [babyId], references: [id], onDelete: Cascade)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
+
+  @@index([babyId, eventDate(sort: Desc)])
+}
