@@ -9,4 +9,6 @@
 *.log
 android-build-exit.txt
 scripts/.state/
+releases/*.apk
+releases/version.json
 .DS_Store

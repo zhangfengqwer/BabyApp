@@ -21,6 +21,7 @@ import family.babyhome.domain.home.HomeRepository
 import family.babyhome.data.timeline.DefaultTimelineRepository
 import family.babyhome.domain.timeline.TimelineRepository
 import family.babyhome.domain.settings.ServerSettingsRepository
+import family.babyhome.update.AppUpdateApi
 import javax.inject.Singleton
 import retrofit2.Retrofit
 
@@ -64,6 +65,10 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideImmichApi(retrofit: Retrofit): ImmichApi = retrofit.create(ImmichApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideAppUpdateApi(retrofit: Retrofit): AppUpdateApi = retrofit.create(AppUpdateApi::class.java)
 
     @Provides
     fun provideContentResolver(@ApplicationContext context: Context): ContentResolver = context.contentResolver

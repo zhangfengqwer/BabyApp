@@ -27,4 +27,27 @@ $commandLine = "`"$gradleWrapper`" assembleDebug testDebugUnitTest --stacktrace 
 & $env:ComSpec /d /c $commandLine
 $buildExitCode = $LASTEXITCODE
 [System.IO.File]::WriteAllText($exitPath, [string]$buildExitCode)
+if ($buildExitCode -eq 0) {
+    $apkPath = Join-Path $androidRoot 'app\build\outputs\apk\debug\app-debug.apk'
+    $releaseRoot = Join-Path $repositoryRoot 'releases'
+    $releaseApk = Join-Path $releaseRoot 'zhizhi-growth-latest.apk'
+    $gradleFile = Join-Path $androidRoot 'app\build.gradle.kts'
+    $gradleText = [System.IO.File]::ReadAllText($gradleFile)
+    $versionCode = [regex]::Match($gradleText, 'versionCode\s*=\s*(\d+)').Groups[1].Value
+    $versionName = [regex]::Match($gradleText, 'versionName\s*=\s*"([^"]+)"').Groups[1].Value
+    New-Item -ItemType Directory -Force -Path $releaseRoot | Out-Null
+    Copy-Item -LiteralPath $apkPath -Destination $releaseApk -Force
+    $sha256 = (Get-FileHash -LiteralPath $releaseApk -Algorithm SHA256).Hash.ToLowerInvariant()
+    $manifest = [ordered]@{
+        versionCode = [int]$versionCode
+        versionName = $versionName
+        sha256 = $sha256
+        publishedAt = [DateTime]::UtcNow.ToString('o')
+    } | ConvertTo-Json
+    [System.IO.File]::WriteAllText(
+        (Join-Path $releaseRoot 'version.json'),
+        $manifest,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+}
 exit $buildExitCode

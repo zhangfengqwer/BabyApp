@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -19,6 +20,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.Surface
@@ -62,6 +64,29 @@ fun BabyHomeApp(viewModel: AppViewModel = hiltViewModel()) {
     val timelineState by timelineViewModel.state.collectAsStateWithLifecycle()
     val appState by viewModel.state.collectAsStateWithLifecycle()
 
+    appState.update?.let { release ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissUpdate,
+            title = { Text("发现新版本 ${release.versionName}") },
+            text = {
+                Column {
+                    Text("安装包大小：${release.sizeBytes / 1024 / 1024} MB")
+                    appState.updateError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissUpdate, enabled = !appState.updating) {
+                    Text("稍后")
+                }
+            },
+            confirmButton = {
+                Button(onClick = viewModel::installUpdate, enabled = !appState.updating) {
+                    Text(if (appState.updating) "正在下载…" else "下载并安装")
+                }
+            },
+        )
+    }
+
     Scaffold(
         floatingActionButton = {
             if (currentRoute == "home") FloatingActionButton(onClick = { navController.navigate("publish") }) { Text("＋") }
@@ -88,9 +113,9 @@ fun BabyHomeApp(viewModel: AppViewModel = hiltViewModel()) {
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Text("之之成长手册", style = MaterialTheme.typography.headlineMedium)
-                    if (appState.connecting) {
+                    if (appState.connecting || appState.connected) {
                         CircularProgressIndicator(Modifier.padding(24.dp))
-                        Text("正在连接家庭相册…")
+                        Text(if (appState.connected) "正在打开时光轴…" else "正在连接家庭相册…")
                     } else {
                         Text(appState.error ?: "暂时无法进入相册", Modifier.padding(vertical = 20.dp))
                         Button(onClick = viewModel::connect) { Text("重新连接") }
@@ -147,7 +172,7 @@ fun BabyHomeApp(viewModel: AppViewModel = hiltViewModel()) {
             }
             composable("server_settings") { ServerSettingsScreen() }
             composable("gallery/{momentId}/{initialIndex}") {
-                MediaGalleryScreen(onBack = navController::popBackStack)
+                MediaGalleryScreen()
             }
         }
     }

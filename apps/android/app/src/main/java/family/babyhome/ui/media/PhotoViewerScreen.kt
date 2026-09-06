@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -43,7 +44,11 @@ fun PhotoViewerScreen(onBack: () -> Unit, viewModel: MediaViewModel = hiltViewMo
     }.graphicsLayer { scaleX = zoom; scaleY = zoom; translationX = offsetX; translationY = offsetY }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (state.thumbnailUrl == null || state.previewUrl == null || state.accessToken == null) {
-            CircularProgressIndicator(Modifier.align(Alignment.Center))
+            CircularProgressIndicator(
+                Modifier.align(Alignment.Center).size(24.dp),
+                color = Color.White,
+                strokeWidth = 2.dp,
+            )
         } else {
             val thumbnailRequest = ImageRequest.Builder(context)
                 .data(state.thumbnailUrl)
@@ -67,7 +72,11 @@ fun PhotoViewerScreen(onBack: () -> Unit, viewModel: MediaViewModel = hiltViewMo
                 modifier = imageModifier,
                 loading = {
                     Box(Modifier.fillMaxSize()) {
-                        CircularProgressIndicator(Modifier.align(Alignment.Center))
+                        CircularProgressIndicator(
+                            Modifier.align(Alignment.Center).size(24.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp,
+                        )
                     }
                 },
                 error = {

@@ -146,7 +146,7 @@ cd apps/android
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-android-windows.ps1
 ```
 
-日志写入根目录 `android-build.log`，退出码写入 `android-build-exit.txt`，两者均不会提交到版本控制。
+日志写入根目录 `android-build.log`，退出码写入 `android-build-exit.txt`，两者均不会提交到版本控制。构建成功后，脚本还会把最新版复制为 `releases/zhizhi-growth-latest.apk` 并生成带 SHA-256 的 `releases/version.json`。App 登录家庭服务器后会自动检查更高版本，下载校验后调用 Android 系统安装器。
 
 Debug APK 输出位置：
 

@@ -1,5 +1,6 @@
 package family.babyhome.ui.media
 
+import android.app.Activity
 import android.view.ViewGroup
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
@@ -9,6 +10,7 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Button
@@ -29,6 +31,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -39,18 +42,28 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 
 @Composable
-fun MediaGalleryScreen(
-    onBack: () -> Unit,
-    viewModel: MediaGalleryViewModel = hiltViewModel(),
-) {
+fun MediaGalleryScreen(viewModel: MediaGalleryViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { state.items.size })
     val zoomLevels = remember { mutableStateMapOf<String, Float>() }
+    val view = LocalView.current
+
+    DisposableEffect(view) {
+        val window = (view.context as Activity).window
+        val controller = WindowCompat.getInsetsController(window, view)
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+        onDispose { controller.show(WindowInsetsCompat.Type.systemBars()) }
+    }
 
     LaunchedEffect(state.items, state.initialIndex) {
         if (state.items.isNotEmpty()) pagerState.scrollToPage(state.initialIndex)
@@ -58,7 +71,11 @@ fun MediaGalleryScreen(
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         when {
-            state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+            state.loading -> Text(
+                "正在打开照片…",
+                color = Color.White.copy(alpha = .72f),
+                modifier = Modifier.align(Alignment.Center),
+            )
             state.error != null -> {
                 Text(state.error!!, color = Color.White, modifier = Modifier.align(Alignment.Center).padding(32.dp))
                 Button(onClick = viewModel::load, modifier = Modifier.align(Alignment.BottomCenter).padding(32.dp)) {
@@ -89,9 +106,6 @@ fun MediaGalleryScreen(
             }
         }
 
-        Button(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(16.dp)) {
-            Text("返回")
-        }
         if (state.items.isNotEmpty()) {
             Text(
                 "${pagerState.currentPage + 1} / ${state.items.size}",
@@ -148,14 +162,23 @@ private fun GalleryPhoto(
             .addHeader("Authorization", "Bearer $accessToken").crossfade(true).build()
     }
 
-    Box(gestures) {
-        AsyncImage(thumbnail, null, Modifier.align(Alignment.Center).then(imageTransform), contentScale = ContentScale.Fit)
+    Box(gestures.background(Color.Black)) {
+        // Keep a neutral gallery background. ContentScale.Fit preserves every
+        // part of the photo; only unavoidable unused space stays black.
+        AsyncImage(
+            thumbnail,
+            null,
+            Modifier.align(Alignment.Center).then(imageTransform),
+            contentScale = ContentScale.Fit,
+        )
         SubcomposeAsyncImage(
             model = preview,
             contentDescription = "全屏照片",
             modifier = Modifier.align(Alignment.Center).then(imageTransform),
             contentScale = ContentScale.Fit,
-            loading = { CircularProgressIndicator(Modifier.align(Alignment.Center)) },
+            // The thumbnail is already visible underneath. Keeping this slot
+            // empty avoids covering the photo with a loading indicator.
+            loading = {},
             error = { Text("无法加载大图", color = Color.White, modifier = Modifier.align(Alignment.Center)) },
         )
     }
@@ -182,7 +205,7 @@ private fun GalleryVideo(item: GalleryMediaItem, accessToken: String, active: Bo
     }
     DisposableEffect(player) { onDispose { player?.release() } }
     Box(Modifier.fillMaxSize()) {
-        if (player == null) CircularProgressIndicator(Modifier.align(Alignment.Center))
+        if (player == null) GalleryLoadingIndicator(Modifier.align(Alignment.Center))
         else AndroidView(
             factory = { viewContext ->
                 PlayerView(viewContext).apply {
@@ -196,4 +219,13 @@ private fun GalleryVideo(item: GalleryMediaItem, accessToken: String, active: Bo
             modifier = Modifier.fillMaxSize(),
         )
     }
+}
+
+@Composable
+private fun GalleryLoadingIndicator(modifier: Modifier = Modifier) {
+    CircularProgressIndicator(
+        modifier = modifier.size(24.dp),
+        color = Color.White,
+        strokeWidth = 2.dp,
+    )
 }
