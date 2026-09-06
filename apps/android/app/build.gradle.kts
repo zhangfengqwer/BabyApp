@@ -27,8 +27,8 @@ android {
         applicationId = "family.babyhome"
         minSdk = 26
         targetSdk = 35
-        versionCode = 22
-        versionName = "0.4.21"
+        versionCode = 23
+        versionName = "0.4.22"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         buildConfigField("String", "HOME_ACCESS_KEY", "\"$homeAccessKey\"")
@@ -81,6 +81,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("androidx.exifinterface:exifinterface:1.4.1")
     implementation("androidx.media3:media3-exoplayer:1.9.4")
     implementation("androidx.media3:media3-ui:1.9.4")
 

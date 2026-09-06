@@ -38,6 +38,17 @@ export class AuthService {
     return this.issueTokenPair(user);
   }
 
+  async webHome(remoteAddress?: string) {
+    if (!this.isPrivateNetworkAddress(remoteAddress)) {
+      throw new UnauthorizedException('家庭网页仅允许从家庭网络或 Tailscale 访问');
+    }
+    const username = this.config.get<string>('INITIAL_ADMIN_USERNAME')?.trim();
+    if (!username) throw new UnauthorizedException('家庭账号未配置');
+    const user = await this.prisma.user.findUnique({ where: { username } });
+    if (!user) throw new UnauthorizedException('家庭账号不存在');
+    return this.issueTokenPair(user);
+  }
+
   async refresh(rawRefreshToken: string) {
     const payload = await this.verifyToken(rawRefreshToken, 'refresh');
     const stored = await this.prisma.refreshToken.findUnique({
@@ -138,5 +149,15 @@ export class AuthService {
 
   private hashToken(token: string) {
     return createHash('sha256').update(token).digest('hex');
+  }
+
+  private isPrivateNetworkAddress(raw?: string) {
+    const address = (raw ?? '').replace(/^::ffff:/, '');
+    if (address === '::1' || address.startsWith('127.')) return true;
+    if (address.startsWith('10.') || address.startsWith('192.168.')) return true;
+    const parts = address.split('.').map(Number);
+    if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part))) return false;
+    return (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
+      || (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127);
   }
 }

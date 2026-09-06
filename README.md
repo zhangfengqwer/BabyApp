@@ -1,6 +1,6 @@
 # 之之成长手册（Baby Home）
 
-Baby Home 是一个完全自托管的家庭成长相册。Android 手机可通过家庭局域网或 HTTPS 公网入口访问 Windows 电脑；业务数据保存在 PostgreSQL，照片和视频由现有 Immich 实例管理。
+Baby Home 是一个完全自托管的家庭成长相册。Android App 和 iPhone PWA 可通过家庭局域网或 Tailscale 访问 Windows 电脑；业务数据保存在 PostgreSQL，照片和视频由现有 Immich 实例管理。
 
 ## 当前进度
 
@@ -181,6 +181,30 @@ Immich URL:      http://192.168.0.40:2283
 ```
 
 地址保存在 App 本地，可随时修改，不需要重新编译。App 在 `192.168.0.*` 家庭 Wi-Fi 中自动使用局域网地址；其他网络自动使用 Tailscale MagicDNS，不需要手动切换。
+
+## iPhone PWA
+
+iPhone 版无需 Mac、IPA 或 Apple 开发者账号。网页随 Baby Backend 一起部署，包含时光轴、日历、动态详情、整组媒体浏览、点赞、留言、删除和照片/视频发布。
+
+部署最新版：
+
+```powershell
+docker compose --env-file .env -f docker/docker-compose.yml up -d --build backend
+```
+
+在家连接家庭 Wi-Fi 后，用 iPhone Safari 打开：
+
+```text
+http://192.168.0.40:8080/web/
+```
+
+点击 Safari 底部“分享”→“添加到主屏幕”。外出时先连接 Tailscale，再打开：
+
+```text
+http://desktop-rcsbtks:8080/web/
+```
+
+PWA 使用服务器端家庭网络认证，不在网页源码中保存 `HOME_ACCESS_KEY`。该入口仅应在家庭局域网和 Tailscale 内使用，禁止把 8080 暴露到公网。
 
 ## Tailscale
 

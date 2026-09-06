@@ -1,0 +1,26 @@
+{
+  "name": "之之成长手册",
+  "short_name": "之之成长",
+  "description": "家庭私有宝宝成长相册",
+  "id": "/web/",
+  "start_url": "/web/",
+  "scope": "/web/",
+  "display": "standalone",
+  "background_color": "#fbf8f2",
+  "theme_color": "#fbf8f2",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/web/icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/web/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

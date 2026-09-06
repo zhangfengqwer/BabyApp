@@ -25,6 +25,8 @@ COPY --from=build /app/apps/backend/node_modules ./apps/backend/node_modules
 COPY --from=build /app/apps/backend/dist ./apps/backend/dist
 COPY --from=build /app/apps/backend/dist-seed ./apps/backend/dist-seed
 COPY --from=build /app/apps/backend/prisma ./apps/backend/prisma
+COPY apps/web ./apps/web
+COPY apps/android/design/app-icon-source.png ./apps/web/icon.png
 COPY package.json package-lock.json ./
 COPY apps/backend/package.json ./apps/backend/package.json
 EXPOSE 8080

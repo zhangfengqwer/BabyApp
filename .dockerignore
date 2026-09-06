@@ -5,6 +5,9 @@ node_modules
 **/node_modules
 **/dist
 **/build
-apps/android
+apps/android/*
+!apps/android/design
+apps/android/design/*
+!apps/android/design/app-icon-source.png
 *.log
 .env

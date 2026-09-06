@@ -54,8 +54,17 @@ class PublishViewModel @Inject constructor(
     fun addUris(uris: List<Uri>) {
         val existing = _state.value.items.map { it.media.uri }.toSet()
         val additions = uris.filterNot(existing::contains).map { PublishMediaItem(immich.describe(it)) }
+        val capturedDate = additions.firstNotNullOfOrNull { item ->
+            item.media.capturedAt?.atZone(ZoneId.systemDefault())?.toLocalDate()
+        }
         // 相册里的同一天可能有很多张照片；不要在这里截断用户选择的媒体。
-        _state.update { it.copy(items = it.items + additions, message = null) }
+        _state.update {
+            it.copy(
+                items = it.items + additions,
+                eventDate = capturedDate?.toString() ?: it.eventDate,
+                message = if (capturedDate != null) "已按照片拍摄时间选择日期" else null,
+            )
+        }
     }
 
     fun remove(uri: Uri) = _state.update { state ->

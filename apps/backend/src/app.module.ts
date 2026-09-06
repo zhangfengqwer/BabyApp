@@ -7,6 +7,7 @@ import { BabiesModule } from './babies/babies.module';
 import { ImmichModule } from './immich/immich.module';
 import { MomentsModule } from './moments/moments.module';
 import { UpdateModule } from './update/update.module';
+import { WebModule } from './web/web.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { UpdateModule } from './update/update.module';
     ImmichModule,
     MomentsModule,
     UpdateModule,
+    WebModule,
   ],
 })
 export class AppModule {}
