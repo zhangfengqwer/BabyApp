@@ -25,6 +25,10 @@ const toast = (message) => {
   setTimeout(() => toastEl.classList.remove("show"), 2500);
 };
 const isoDay = (date) => new Date(date).toISOString().slice(0, 10);
+const localDateKey = (date) => {
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 const localDay = (date) => {
   const d = new Date(date);
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
@@ -144,20 +148,13 @@ function mediaCell(asset, index, momentId) {
     return `<button class="video-thumb has-poster" data-detail="${momentId}"><img data-asset="${asset.immichAssetId}" data-size="thumbnail" alt="视频封面处理中"><span>▶ 视频</span></button>`;
   return `<img data-asset="${asset.immichAssetId}" data-size="thumbnail" data-detail="${momentId}" data-index="${index}" alt="照片处理中">`;
 }
-function momentCard(moment) {
-  const assets = moment.assets || [],
-    grid = assets.length === 1 ? "one" : assets.length === 2 ? "two" : "many";
-  return `<article class="moment"><h3 class="moment-date">${esc(ageAt(state.baby.birthday, moment.eventDate))}<small>· ${localDay(moment.eventDate)}</small></h3><section class="moment-card">${
-    assets.length
-      ? `<div class="media-grid ${grid}">${assets
-          .slice(0, 4)
-          .map((a, i) => mediaCell(a, i, moment.id))
-          .join("")}</div>`
-      : ""
-  }<div class="moment-body" data-detail="${moment.id}">${moment.content ? `<div class="moment-copy">${esc(moment.content)}</div>` : ""}${moment.location ? `<div class="moment-location">⌖ ${esc(moment.location)}</div>` : ""}<div class="moment-footer"><span>${esc(moment.author?.nickname || "家人")}</span><span><button data-like="${moment.id}" class="${moment.likedByMe ? "liked" : ""}">♡ ${moment._count?.likes || 0}</button>　留言 ${moment._count?.comments || 0}</span></div></div></section></article>`;
-}
 function timeline() {
-  return `<div class="feed">${state.moments.map(momentCard).join("") || '<div class="empty">还没有成长记录</div>'}${state.nextCursor ? '<button id="loadMore" class="primary">加载更早记录</button>' : ""}</div>`;
+  const cards = state.moments.map((moment) => {
+    const assets = moment.assets || [],
+      grid = assets.length === 1 ? "one" : assets.length === 2 ? "two" : "many";
+    return `<article class="moment" data-day="${localDateKey(moment.eventDate)}"><h3 class="moment-date">${esc(ageAt(state.baby.birthday, moment.eventDate))}<small>· ${localDay(moment.eventDate)}</small></h3><section class="moment-card">${assets.length ? `<div class="media-grid ${grid}">${assets.slice(0, 4).map((a, i) => mediaCell(a, i, moment.id)).join("")}</div>` : ""}<div class="moment-body" data-detail="${moment.id}">${moment.content ? `<div class="moment-copy">${esc(moment.content)}</div>` : ""}${moment.location ? `<div class="moment-location">⌖ ${esc(moment.location)}</div>` : ""}<div class="moment-footer"><span>${esc(moment.author?.nickname || "家人")}</span><span><button data-like="${moment.id}" class="${moment.likedByMe ? "liked" : ""}">♡ ${moment._count?.likes || 0}</button>　留言 ${moment._count?.comments || 0}</span></div></div></section></article>`;
+  });
+  return `<div class="feed">${cards.join("") || '<div class="empty">还没有成长记录</div>'}${state.nextCursor ? '<button id="loadMore" class="primary">加载更早记录</button>' : ""}</div>`;
 }
 function calendar() {
   const groups = new Map();
@@ -292,8 +289,14 @@ async function openDetail(id) {
     const comments = await api(`/moments/${id}/comments`);
     overlay.innerHTML = `<section class="overlay-screen detail"><div class="detail-head"><div><h2>${esc(ageAt(m.baby.birthday, m.eventDate))}</h2><span class="muted">${localDay(m.eventDate)}</span></div><button class="close" data-close>×</button></div><div class="detail-media">${m.assets.map((a, i) => (a.assetType === "VIDEO" ? `<button class="video-thumb has-poster" data-gallery="${i}"><img data-asset="${a.immichAssetId}" data-size="thumbnail" alt="视频封面处理中"><span>▶ 视频</span></button>` : `<img data-asset="${a.immichAssetId}" data-size="preview" data-gallery="${i}" alt="照片处理中">`)).join("")}</div><div class="detail-text">${esc(m.content || "")}</div>${m.location ? `<p class="muted">⌖ ${esc(m.location)}</p>` : ""}<div class="actions"><button id="detailLike" class="${m.likedByMe ? "liked" : ""}">♡ ${m._count.likes}</button>${m.canEdit ? '<button id="deleteMoment" class="danger">删除</button>' : ""}</div><section class="comments"><h3>家人留言</h3><div>${comments.items.map((c) => `<div class="comment"><b>${esc(c.user?.nickname || "家人")}</b>${esc(c.content)}</div>`).join("") || '<p class="muted">还没有留言</p>'}</div><form class="comment-form"><input maxlength="2000" placeholder="写留言…"><button>发送</button></form></section></section>`;
     hydrateImages(overlay);
-    overlay.querySelector("[data-close]").onclick = () =>
-      (overlay.innerHTML = "");
+    overlay.querySelector("[data-close]").onclick = () => {
+      const savedScroll = window.scrollY;
+      overlay.innerHTML = "";
+      loadMoments(true).then(() => {
+        render();
+        requestAnimationFrame(() => window.scrollTo(0, savedScroll));
+      });
+    };
     overlay
       .querySelectorAll("[data-gallery]")
       .forEach(
@@ -418,6 +421,7 @@ function openPublish() {
           sortOrder: i,
         });
       }
+      const publishedDay = localDateKey(form.date.value);
       await api(`/babies/${state.baby.id}/moments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -433,6 +437,9 @@ function openPublish() {
       await loadMoments(true);
       state.view = "timeline";
       render();
+      requestAnimationFrame(() =>
+        document.querySelector(`[data-day="${publishedDay}"]`)?.scrollIntoView({ block: "start" }),
+      );
       toast("发布成功");
     } catch (error) {
       toast(error.message);

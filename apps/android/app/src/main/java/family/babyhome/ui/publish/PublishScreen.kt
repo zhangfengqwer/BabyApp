@@ -30,12 +30,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 
 @Composable
-fun PublishScreen(onPublished: () -> Unit, viewModel: PublishViewModel = hiltViewModel()) {
+fun PublishScreen(onPublished: (String) -> Unit, viewModel: PublishViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     // Android Photo Picker 本身会依据系统版本限制一次可选数量；100 足够覆盖
     // 常见的一日相册导入，也不再人为限制为 10 个。
     val picker = rememberLauncherForActivityResult(PickMultipleVisualMedia(100), viewModel::addUris)
-    LaunchedEffect(state.published) { if (state.published) onPublished() }
+    LaunchedEffect(state.published) { if (state.published) onPublished(state.eventDate) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),

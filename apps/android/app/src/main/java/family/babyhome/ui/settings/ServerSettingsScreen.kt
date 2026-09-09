@@ -55,7 +55,7 @@ fun ServerSettingsScreen(viewModel: ServerSettingsViewModel = hiltViewModel()) {
                 onValueChange = viewModel::onBabyServerUrlChange,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Baby Server URL") },
-                supportingText = { Text("家庭 Wi-Fi：http://192.168.0.40:8080") },
+                supportingText = { Text("家庭 Wi-Fi：http://192.168.0.26:8080") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             )
@@ -65,7 +65,7 @@ fun ServerSettingsScreen(viewModel: ServerSettingsViewModel = hiltViewModel()) {
                 onValueChange = viewModel::onImmichUrlChange,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Immich URL") },
-                supportingText = { Text("家庭 Wi-Fi：http://192.168.0.40:2283") },
+                supportingText = { Text("家庭 Wi-Fi：http://192.168.0.26:2283") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             )

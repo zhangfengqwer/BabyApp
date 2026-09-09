@@ -135,9 +135,9 @@ fun BabyHomeApp(viewModel: AppViewModel = hiltViewModel()) {
                 TimelineScreen(onMoment = { id -> navController.navigate("moment/$id") }, viewModel = timelineViewModel)
             }
             composable("publish") {
-                PublishScreen(onPublished = {
-                    // 发布完成后无条件重新加载，确保首页立刻出现新动态。
-                    timelineViewModel.loadInitial()
+                PublishScreen(onPublished = { eventDate ->
+                    // Reload first, then focus the date of the newly published media.
+                    timelineViewModel.loadInitial(scrollTargetDate = eventDate)
                     navController.popBackStack()
                 })
             }
@@ -156,7 +156,11 @@ fun BabyHomeApp(viewModel: AppViewModel = hiltViewModel()) {
                 MomentDetailScreen(
                     momentId = requireNotNull(entry.arguments?.getString("momentId")),
                     state = timelineState,
-                    onBack = { navController.popBackStack() },
+                    onBack = {
+                        // Re-fetch changes made while viewing details, but keep the existing list and scroll position.
+                        timelineViewModel.refresh()
+                        navController.popBackStack()
+                    },
                     onDeleted = {
                         // 删除详情后回到时光轴前先重新取数，不能继续显示旧缓存。
                         timelineViewModel.removeMoment(requireNotNull(entry.arguments?.getString("momentId")))

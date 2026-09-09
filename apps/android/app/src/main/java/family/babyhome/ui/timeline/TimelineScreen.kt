@@ -63,10 +63,14 @@ fun TimelineScreen(
     LaunchedEffect(shouldLoadMore, state.nextCursor) {
         if (shouldLoadMore && state.nextCursor != null) viewModel.loadMore()
     }
-    LaunchedEffect(state.refreshVersion) {
-        if (state.refreshVersion > 0) listState.scrollToItem(0)
+    LaunchedEffect(state.scrollTargetDate, state.moments.size) {
+        val target = state.scrollTargetDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        if (target != null && !state.loading) {
+            val momentIndex = state.moments.indexOfFirst { it.albumDate() == target }
+            if (momentIndex >= 0) listState.scrollToItem(momentIndex + 2)
+            viewModel.consumeScrollTarget()
+        }
     }
-
     if (indexOpen) {
         ModalBottomSheet(onDismissRequest = { indexOpen = false }) {
             Text("按宝宝年龄查找", Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge)

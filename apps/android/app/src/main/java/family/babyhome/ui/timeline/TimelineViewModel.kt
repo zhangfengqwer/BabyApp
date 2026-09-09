@@ -23,6 +23,7 @@ data class TimelineUiState(
     val loadingMore: Boolean = false,
     val error: String? = null,
     val refreshVersion: Int = 0,
+    val scrollTargetDate: String? = null,
 )
 
 @HiltViewModel
@@ -32,7 +33,7 @@ class TimelineViewModel @Inject constructor(
     private val _state = MutableStateFlow(TimelineUiState())
     val state: StateFlow<TimelineUiState> = _state.asStateFlow()
 
-    fun loadInitial() = viewModelScope.launch {
+    fun loadInitial(scrollTargetDate: String? = null) = viewModelScope.launch {
         val nextRefreshVersion = _state.value.refreshVersion + 1
         _state.update { it.copy(loading = true, error = null) }
         repository.load().onSuccess { page ->
@@ -43,10 +44,15 @@ class TimelineViewModel @Inject constructor(
                 nextCursor = page.nextCursor,
                 loading = false,
                 refreshVersion = nextRefreshVersion,
+                scrollTargetDate = scrollTargetDate,
             )
         }.onFailure {
             _state.update { state -> state.copy(loading = false, error = "无法加载成长时间轴") }
         }
+    }
+
+    fun consumeScrollTarget() {
+        _state.update { it.copy(scrollTargetDate = null) }
     }
 
     fun refresh() {

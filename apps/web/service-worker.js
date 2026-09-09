@@ -1,4 +1,4 @@
-const CACHE = "zhizhi-pwa-v3";
+const CACHE = "zhizhi-pwa-v6";
 const SHELL = [
   "/web/",
   "/web/styles.css",

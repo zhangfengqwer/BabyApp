@@ -1,6 +1,7 @@
 package family.babyhome.ui.timeline
 
 import androidx.compose.foundation.clickable
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +34,7 @@ fun MomentDetailScreen(
     var choosingCover by remember { mutableStateOf(false) }
     var text by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
+    BackHandler(onBack = onBack)
     LaunchedEffect(detail.deleted) { if (detail.deleted) onDeleted() }
     if(editing) AlertDialog(onDismissRequest={editing=false},title={Text("编辑记录")},text={
         Column { OutlinedTextField(text,{text=it},label={Text("文字")}); OutlinedTextField(location,{location=it},label={Text("地点")}) }
