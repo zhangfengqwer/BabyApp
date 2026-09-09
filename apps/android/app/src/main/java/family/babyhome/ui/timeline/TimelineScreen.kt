@@ -27,6 +27,7 @@ import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
 import family.babyhome.data.network.MomentDto
+import family.babyhome.data.network.MomentAssetDto
 import family.babyhome.domain.baby.BabyAgeCalculator
 import java.time.*
 import java.time.format.DateTimeFormatter
@@ -292,22 +293,93 @@ private fun ProfileFact(label: String, value: String, modifier: Modifier = Modif
 
 @Composable
 fun MomentCollage(moment: MomentDto, refreshVersion: Int) {
-    val assets = moment.assets.take(3)
+    val assets = moment.assets.take(9)
     if (assets.isEmpty()) return
-    Row(Modifier.fillMaxWidth().height(if (assets.size == 1) 280.dp else 320.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-        Box(Modifier.weight(1.3f).fillMaxHeight()) {
-            AlbumThumbnail(assets[0].thumbnailUrl, refreshVersion, "查看成长记录", Modifier.fillMaxSize())
-            if (assets[0].assetType == "VIDEO") Text("▶ 视频", Modifier.padding(10.dp).background(Color.Black.copy(alpha=.5f)), color = Color.White)
+    val gap = 3.dp
+    val collageModifier = Modifier.fillMaxWidth().height(320.dp)
+    when (assets.size) {
+        1 -> MomentTile(assets[0], refreshVersion, null, collageModifier)
+        2 -> Row(collageModifier, horizontalArrangement = Arrangement.spacedBy(gap)) {
+            assets.forEach { MomentTile(it, refreshVersion, null, Modifier.weight(1f).fillMaxHeight()) }
         }
-        if (assets.size > 1) Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            assets.drop(1).forEachIndexed { index, asset ->
-                Box(Modifier.weight(1f).fillMaxWidth()) {
-                    AlbumThumbnail(asset.thumbnailUrl, refreshVersion, null, Modifier.fillMaxSize())
-                    if (asset.assetType == "VIDEO") Text("▶ 视频", Modifier.padding(8.dp).background(Color.Black.copy(alpha=.5f)), color = Color.White)
-                    if (index == assets.size - 2 && moment.assets.size > 3) Text("共 ${moment.assets.size} 张/段",
-                        Modifier.align(Alignment.BottomEnd).background(Color.Black.copy(alpha=.5f)).padding(6.dp), color = Color.White)
+        3 -> Row(collageModifier, horizontalArrangement = Arrangement.spacedBy(gap)) {
+            MomentTile(assets[0], refreshVersion, null, Modifier.weight(1.25f).fillMaxHeight())
+            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                MomentTile(assets[1], refreshVersion, null, Modifier.weight(1f).fillMaxWidth())
+                MomentTile(assets[2], refreshVersion, null, Modifier.weight(1f).fillMaxWidth())
+            }
+        }
+        5, 7 -> Row(collageModifier, horizontalArrangement = Arrangement.spacedBy(gap)) {
+            MomentTile(assets[0], refreshVersion, null, Modifier.weight(1f).fillMaxHeight())
+            Column(Modifier.weight(2f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                assets.drop(1).chunked(2).forEach { rowAssets ->
+                    MomentRow(rowAssets, refreshVersion, moment.assets.size, false, Modifier.weight(1f).fillMaxWidth())
                 }
             }
+        }
+        8 -> Row(collageModifier, horizontalArrangement = Arrangement.spacedBy(gap)) {
+            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                MomentTile(assets[0], refreshVersion, null, Modifier.weight(2f).fillMaxWidth())
+                MomentTile(assets[5], refreshVersion, null, Modifier.weight(1f).fillMaxWidth())
+            }
+            Column(Modifier.weight(2f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                listOf(assets.slice(1..2), assets.slice(3..4), assets.slice(6..7)).forEach { rowAssets ->
+                    MomentRow(rowAssets, refreshVersion, moment.assets.size, false, Modifier.weight(1f).fillMaxWidth())
+                }
+            }
+        }
+        else -> {
+            val columns = if (assets.size == 4) 2 else 3
+            Column(collageModifier, verticalArrangement = Arrangement.spacedBy(gap)) {
+                assets.chunked(columns).forEach { rowAssets ->
+                    MomentRow(
+                        rowAssets,
+                        refreshVersion,
+                        moment.assets.size,
+                        assets.size == 9 && rowAssets.last() == assets.last(),
+                        Modifier.weight(1f).fillMaxWidth(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MomentRow(
+    assets: List<MomentAssetDto>,
+    refreshVersion: Int,
+    totalAssetCount: Int,
+    showOverflow: Boolean,
+    modifier: Modifier,
+) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        assets.forEachIndexed { index, asset ->
+            MomentTile(
+                asset,
+                refreshVersion,
+                if (showOverflow && index == assets.lastIndex && totalAssetCount > 9) "共 $totalAssetCount 张/段" else null,
+                Modifier.weight(1f).fillMaxHeight(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun MomentTile(asset: MomentAssetDto, refreshVersion: Int, countLabel: String?, modifier: Modifier) {
+    Box(modifier) {
+        AlbumThumbnail(asset.thumbnailUrl, refreshVersion, "查看成长记录", Modifier.fillMaxSize())
+        if (asset.assetType == "VIDEO") Text(
+            "▶ 视频",
+            Modifier.padding(8.dp).background(Color.Black.copy(alpha = .5f)),
+            color = Color.White,
+        )
+        countLabel?.let {
+            Text(
+                it,
+                Modifier.align(Alignment.BottomEnd).background(Color.Black.copy(alpha = .55f)).padding(7.dp),
+                color = Color.White,
+            )
         }
     }
 }

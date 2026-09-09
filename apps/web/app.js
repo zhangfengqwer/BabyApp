@@ -151,8 +151,16 @@ function mediaCell(asset, index, momentId) {
 function timeline() {
   const cards = state.moments.map((moment) => {
     const assets = moment.assets || [],
-      grid = assets.length === 1 ? "one" : assets.length === 2 ? "two" : "many";
-    return `<article class="moment" data-day="${localDateKey(moment.eventDate)}"><h3 class="moment-date">${esc(ageAt(state.baby.birthday, moment.eventDate))}<small>· ${localDay(moment.eventDate)}</small></h3><section class="moment-card">${assets.length ? `<div class="media-grid ${grid}">${assets.slice(0, 4).map((a, i) => mediaCell(a, i, moment.id)).join("")}</div>` : ""}<div class="moment-body" data-detail="${moment.id}">${moment.content ? `<div class="moment-copy">${esc(moment.content)}</div>` : ""}${moment.location ? `<div class="moment-location">⌖ ${esc(moment.location)}</div>` : ""}<div class="moment-footer"><span>${esc(moment.author?.nickname || "家人")}</span><span><button data-like="${moment.id}" class="${moment.likedByMe ? "liked" : ""}">♡ ${moment._count?.likes || 0}</button>　留言 ${moment._count?.comments || 0}</span></div></div></section></article>`;
+      grid = assets.length === 1
+        ? "one"
+        : assets.length === 2
+          ? "two"
+          : assets.length === 3
+            ? "three"
+            : assets.length === 4
+              ? "few"
+              : `many ${assets.length <= 6 ? "rows-2" : "rows-3"}`;
+    return `<article class="moment" data-day="${localDateKey(moment.eventDate)}"><h3 class="moment-date">${esc(ageAt(state.baby.birthday, moment.eventDate))}<small>· ${localDay(moment.eventDate)}</small></h3><section class="moment-card">${assets.length ? `<div class="media-grid ${grid} count-${Math.min(assets.length, 9)}">${assets.slice(0, 9).map((a, i) => mediaCell(a, i, moment.id)).join("")}</div>` : ""}<div class="moment-body" data-detail="${moment.id}">${moment.content ? `<div class="moment-copy">${esc(moment.content)}</div>` : ""}${moment.location ? `<div class="moment-location">⌖ ${esc(moment.location)}</div>` : ""}<div class="moment-footer"><span>${esc(moment.author?.nickname || "家人")}</span><span><button data-like="${moment.id}" class="${moment.likedByMe ? "liked" : ""}">♡ ${moment._count?.likes || 0}</button>　留言 ${moment._count?.comments || 0}</span></div></div></section></article>`;
   });
   return `<div class="feed">${cards.join("") || '<div class="empty">还没有成长记录</div>'}${state.nextCursor ? '<button id="loadMore" class="primary">加载更早记录</button>' : ""}</div>`;
 }
