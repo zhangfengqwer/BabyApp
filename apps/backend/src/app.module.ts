@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { FamilyModule } from './family/family.module';
 import { ConfigModule } from '@nestjs/config';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -10,6 +11,7 @@ import { UpdateModule } from './update/update.module';
 import { WebModule } from './web/web.module';
 
 @Module({
+  // Passwordless family identities are explicitly selected on trusted devices.
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
@@ -20,6 +22,7 @@ import { WebModule } from './web/web.module';
     MomentsModule,
     UpdateModule,
     WebModule,
+    FamilyModule,
   ],
 })
 export class AppModule {}

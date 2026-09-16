@@ -30,7 +30,10 @@ export class MomentsService {
       likes: { where: { userId: user.id }, select: { id: true } },
     } });
     const { likes, ...data } = moment;
+    const members = await this.prisma.familyMember.findMany({where:{babyId:moment.babyId}});
+    const names = new Map(members.map(m=>[m.userId,m.relationship]));
     return { success: true, data: { ...data, likedByMe: likes.length > 0,
+      author: {...data.author,nickname:Array.from(new Set([moment.authorId,...moment.contributorIds].map(id=>names.get(id) || (id===moment.authorId ? data.author.nickname : '家人')))).join('、')},
       canEdit: user.role === 'ADMIN' || (user.role === 'PARENT' && moment.authorId === user.id) } };
   }
   async edit(user: AuthenticatedUser, id: string, dto: MomentEditDto) {
@@ -54,12 +57,20 @@ export class MomentsService {
     await this.prisma.moment.delete({where:{id}});
     return {success:true,data:null};
   }
+  async removeAsset(user: AuthenticatedUser, id: string, assetId: string) {
+    await this.accessible(user, id, true);
+    // Remove only this business association; never delete the original Immich media.
+    await this.prisma.momentAsset.deleteMany({ where: { id: assetId, momentId: id } });
+    return { success: true, data: null };
+  }
   async comments(user: AuthenticatedUser,id: string,cursor?: string) {
-    await this.accessible(user,id);
+    const moment = await this.accessible(user,id);
     const rows = await this.prisma.comment.findMany({ where:{momentId:id}, orderBy:[{createdAt:'desc'},{id:'desc'}],
       take:31, ...(cursor ? {cursor:{id:cursor},skip:1}:{}),
       include:{user:{select:{id:true,nickname:true}}} });
-    return {success:true,data:{items:rows.slice(0,30),nextCursor:rows.length>30?rows[29].id:null}};
+    const members = await this.prisma.familyMember.findMany({where:{babyId:moment.babyId}});
+    const names = new Map(members.map(m=>[m.userId,m.relationship]));
+    return {success:true,data:{items:rows.slice(0,30).map(c=>({...c,user:{...c.user,nickname:names.get(c.userId)||c.user.nickname}})),nextCursor:rows.length>30?rows[29].id:null}};
   }
   async comment(user: AuthenticatedUser,id: string,content: string) {
     await this.accessible(user,id);
@@ -74,4 +85,3 @@ export class MomentsService {
     return this.detail(user,id);
   }
 }
-

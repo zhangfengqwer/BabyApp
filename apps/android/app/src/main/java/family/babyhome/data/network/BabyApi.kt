@@ -9,7 +9,11 @@ import retrofit2.http.PATCH
 import retrofit2.http.DELETE
 
 interface BabyApi {
-    @POST suspend fun homeLogin(@Url url: String, @Header("X-Home-Access-Key") accessKey: String): LoginResponse
+    @PATCH suspend fun editBaby(@Url url: String, @Body request: EditBabyRequest): BabyResponse
+    @POST suspend fun homeLogin(@Url url: String, @Header("X-Home-Access-Key") accessKey: String, @Header("X-Family-Username") username: String? = null): LoginResponse
+    @GET suspend fun family(@Url url: String): FamilyResponse
+    @POST suspend fun createFamily(@Url url: String, @Body request: FamilyRequest): EmptyResponse
+    @PATCH suspend fun editFamily(@Url url: String, @Body request: RelationshipRequest): EmptyResponse
     @GET suspend fun moment(@Url url: String): MomentResponse
     @GET suspend fun comments(@Url url: String): CommentsResponse
     @POST suspend fun comment(@Url url: String, @Body body: CommentRequest): EmptyResponse
@@ -17,6 +21,7 @@ interface BabyApi {
     @DELETE suspend fun unlike(@Url url: String): MomentResponse
     @PATCH suspend fun editMoment(@Url url: String, @Body body: MomentEditRequest): MomentResponse
     @DELETE suspend fun deleteMoment(@Url url: String): EmptyResponse
+    @DELETE suspend fun deleteMomentAsset(@Url url: String): EmptyResponse
     @POST
     suspend fun login(@Url url: String, @Body request: LoginRequest): LoginResponse
 
@@ -39,6 +44,10 @@ data class LoginData(
     val user: UserDto,
 )
 data class UserDto(val id: String, val username: String, val nickname: String, val role: String)
+data class FamilyUser(val id: String, val username: String, val nickname: String, val role: String, val relationship: String)
+data class FamilyResponse(val success: Boolean, val data: List<FamilyUser>)
+data class FamilyRequest(val username: String, val relationship: String)
+data class RelationshipRequest(val relationship: String)
 
 data class BabiesResponse(val success: Boolean, val data: List<BabyDto>)
 data class BabyDto(
@@ -48,7 +57,10 @@ data class BabyDto(
     val birthday: String,
     val avatarAssetId: String?,
     val description: String?,
+    val canEdit: Boolean = false,
 )
+data class BabyResponse(val success: Boolean, val data: BabyDto)
+data class EditBabyRequest(val name: String, val nickname: String, val birthday: String, val description: String, val avatarAssetId: String? = null)
 
 data class MomentsResponse(val success: Boolean, val data: MomentsData)
 data class MomentsData(val items: List<MomentDto>, val nextCursor: String?)

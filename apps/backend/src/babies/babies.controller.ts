@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { EditBabyDto } from './dto/edit-baby.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AuthenticatedUser } from '../auth/auth.types';
@@ -23,6 +24,11 @@ export class BabiesController {
     @Query('limit') limit?: string,
   ) {
     return this.babies.moments(user, babyId, cursor, Number(limit ?? 20));
+  }
+
+  @Patch(':id')
+  edit(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) babyId: string, @Body() dto: EditBabyDto) {
+    return this.babies.edit(user, babyId, dto);
   }
 
   @Post(':id/moments')

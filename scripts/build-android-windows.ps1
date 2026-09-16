@@ -21,11 +21,22 @@ $env:TEMP = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Te
 $env:TMP = $env:TEMP
 $env:GRADLE_USER_HOME = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.gradle'
 
+# JDK NIO uses Unix-domain sockets on Windows. System Temp can produce unusable
+# socket paths in managed execution environments; keep them in a dedicated local directory.
+$socketDirectory = Join-Path $repositoryRoot '.gradle-sockets'
+New-Item -ItemType Directory -Path $socketDirectory -Force | Out-Null
+$previousJavaToolOptions = $env:JAVA_TOOL_OPTIONS
+$env:JAVA_TOOL_OPTIONS = "$previousJavaToolOptions `"-Djdk.net.unixdomain.tmpdir=$socketDirectory`"".Trim()
+
 Set-Location -LiteralPath $androidRoot
 $gradleWrapper = Join-Path $androidRoot 'gradlew.bat'
-$commandLine = "`"$gradleWrapper`" assembleDebug testDebugUnitTest --stacktrace > `"$logPath`" 2>&1"
-& $env:ComSpec /d /c $commandLine
-$buildExitCode = $LASTEXITCODE
+$commandLine = "`"$gradleWrapper`" --no-daemon assembleDebug testDebugUnitTest --stacktrace > `"$logPath`" 2>&1"
+try {
+    & $env:ComSpec /d /c $commandLine
+    $buildExitCode = $LASTEXITCODE
+} finally {
+    $env:JAVA_TOOL_OPTIONS = $previousJavaToolOptions
+}
 [System.IO.File]::WriteAllText($exitPath, [string]$buildExitCode)
 if ($buildExitCode -eq 0) {
     $apkPath = Join-Path $androidRoot 'app\build\outputs\apk\debug\app-debug.apk'

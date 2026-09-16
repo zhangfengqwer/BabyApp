@@ -1,5 +1,6 @@
 .idea/
 .gradle/
+.gradle-sockets/
 **/build/
 **/local.properties
 **/node_modules/

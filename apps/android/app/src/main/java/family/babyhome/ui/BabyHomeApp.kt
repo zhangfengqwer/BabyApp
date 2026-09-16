@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -46,6 +47,8 @@ import family.babyhome.ui.media.MediaGalleryScreen
 import family.babyhome.ui.publish.PublishScreen
 import family.babyhome.ui.settings.ServerSettingsScreen
 import family.babyhome.ui.timeline.TimelineScreen
+import family.babyhome.ui.baby.BabyProfileScreen
+import family.babyhome.ui.family.FamilyScreen
 
 private data class MainDestination(val route: String, val label: String)
 
@@ -113,7 +116,18 @@ fun BabyHomeApp(viewModel: AppViewModel = hiltViewModel()) {
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Text("之之成长手册", style = MaterialTheme.typography.headlineMedium)
-                    if (appState.connecting || appState.connected) {
+                    if (appState.selectingIdentity) {
+                        Text("你是宝宝的哪位家人？", Modifier.padding(vertical = 16.dp), style = MaterialTheme.typography.titleLarge)
+                        androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f, fill = false)) {
+                            items(appState.members.size) { index ->
+                                val member = appState.members[index]
+                                TextButton(onClick = { viewModel.selectIdentity(member.username) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                                    Text("${member.relationship} · ${member.username}${if(member.role == "ADMIN") "（管理员）" else ""}")
+                                }
+                            }
+                        }
+                        Text("没有找到自己？请家庭管理员先添加成员。")
+                    } else if (appState.connecting || appState.connected) {
                         CircularProgressIndicator(Modifier.padding(24.dp))
                         Text(if (appState.connected) "正在打开时光轴…" else "正在连接家庭相册…")
                     } else {
@@ -129,13 +143,14 @@ fun BabyHomeApp(viewModel: AppViewModel = hiltViewModel()) {
                 TimelineScreen(
                     onMoment = { id -> navController.navigate("moment/$id") },
                     viewModel = timelineViewModel,
+                    onEditBaby = { navController.navigate("baby_profile") },
                 )
             }
             composable("timeline") {
-                TimelineScreen(onMoment = { id -> navController.navigate("moment/$id") }, viewModel = timelineViewModel)
+                TimelineScreen(onMoment = { id -> navController.navigate("moment/$id") }, viewModel = timelineViewModel, onEditBaby = { navController.navigate("baby_profile") })
             }
             composable("publish") {
-                PublishScreen(onPublished = { eventDate ->
+                PublishScreen(onBack = { navController.popBackStack() }, onPublished = { eventDate ->
                     // Reload first, then focus the date of the newly published media.
                     timelineViewModel.loadInitial(scrollTargetDate = eventDate)
                     navController.popBackStack()
@@ -144,9 +159,16 @@ fun BabyHomeApp(viewModel: AppViewModel = hiltViewModel()) {
             composable("profile") {
                 Column(Modifier.fillMaxSize().padding(24.dp)) {
                     Text("我的家庭相册", style = MaterialTheme.typography.headlineMedium)
+                    Text("当前身份：${appState.identity?.relationship ?: "家庭管理员"}", Modifier.padding(top=12.dp))
+                    ListItem(headlineContent={Text("家庭成员")},trailingContent={Text("›")},modifier=Modifier.clickable{navController.navigate("family")})
+                    ListItem(headlineContent={Text("切换我的身份")},trailingContent={Text("›")},modifier=Modifier.clickable{
+                        viewModel.switchIdentity()
+                        navController.navigate("connect"){popUpTo("home"){inclusive=true}}
+                    })
                     Text("每一刻，都值得珍藏", Modifier.padding(vertical = 16.dp))
                     ListItem(headlineContent = { Text("发布照片与视频") }, trailingContent = { Text("›") },
                         modifier = Modifier.clickable { navController.navigate("publish") })
+                    if (timelineState.baby?.canEdit == true) ListItem(headlineContent = { Text("编辑宝宝名片") }, trailingContent = { Text("›") }, modifier = Modifier.clickable { navController.navigate("baby_profile") })
                     ListItem(headlineContent = { Text("服务器设置") }, trailingContent = { Text("›") },
                         modifier = Modifier.clickable { navController.navigate("server_settings") })
                     ListItem(headlineContent = { Text("版本") }, trailingContent = { Text(family.babyhome.BuildConfig.VERSION_NAME) })
@@ -175,6 +197,13 @@ fun BabyHomeApp(viewModel: AppViewModel = hiltViewModel()) {
                 )
             }
             composable("server_settings") { ServerSettingsScreen() }
+            composable("family") { FamilyScreen(onBack = { navController.popBackStack(); viewModel.connect() }) }
+            composable("baby_profile") {
+                BabyProfileScreen(onBack = { navController.popBackStack() }, onSaved = {
+                    timelineViewModel.refresh()
+                    navController.popBackStack()
+                })
+            }
             composable("gallery/{momentId}/{initialIndex}") {
                 MediaGalleryScreen()
             }

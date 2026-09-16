@@ -7,6 +7,7 @@ const state = {
   nextCursor: null,
   view: "timeline",
   galleryUrls: [],
+  members: [],
 };
 const main = document.querySelector("#main"),
   overlay = document.querySelector("#overlay"),
@@ -100,12 +101,13 @@ function setTokens(data) {
 async function authenticate() {
   try {
     const saved = JSON.parse(localStorage.getItem("zhizhiTokens") || "null");
-    if (saved) Object.assign(state, saved);
+    const identity = localStorage.getItem("zhizhiIdentity");
+    if (saved && saved.user?.username === identity) Object.assign(state, saved);
     if (state.accessToken) {
       const response = await raw("/babies", {}, false);
       if (response.ok) return (await response.json()).data;
     }
-    const data = await api("/auth/web-home", { method: "POST" });
+    const data = await api("/auth/web-home", { method: "POST", headers: identity ? { "X-Family-Username": identity } : {} });
     setTokens(data);
     return api("/babies");
   } catch (error) {
@@ -117,6 +119,8 @@ async function start() {
     const babies = await authenticate();
     state.baby = babies[0];
     if (!state.baby) throw new Error("尚未创建宝宝资料");
+    state.members = await api(`/babies/${state.baby.id}/family`);
+    if (!localStorage.getItem("zhizhiIdentity")) { showIdentityPicker(); return; }
     await loadMoments(true);
     render();
   } catch (error) {
@@ -195,9 +199,11 @@ function calendar() {
   }</div>`;
 }
 function profile() {
-  return `<section class="profile"><h1>我的</h1><div class="profile-card"><b>${esc(state.user?.nickname || "家人")}</b><p class="muted">${esc(state.user?.role || "")}</p></div><div class="profile-card install-note"><b>安装到 iPhone</b><p>使用 Safari 打开本页，点击底部“分享”，选择“添加到主屏幕”。以后直接点击“之之成长”图标即可进入。</p><p>在家连接家庭 Wi‑Fi；外出时先连接 Tailscale。</p></div></section>`;
+  const identity = state.members.find(m => m.id === state.user?.id);
+  return `<section class="profile"><h1>我的</h1><div class="profile-card"><b>${esc(identity?.relationship || state.user?.nickname || "家人")}</b><p class="muted">${state.user?.role === "ADMIN" ? "家庭管理员" : "一起记录成长的家人"}</p></div><div class="profile-card"><button id="familyMembers" class="settings-row">家庭成员 <span>›</span></button>${state.baby.canEdit ? '<button id="babyProfile" class="settings-row">编辑宝宝名片 <span>›</span></button>' : ''}<button id="switchIdentity" class="settings-row">切换我的身份 <span>›</span></button></div><div class="profile-card install-note"><p>在家连接家庭 Wi‑Fi；外出先连接 Tailscale。</p></div></section>`;
 }
 function render() {
+  document.querySelector(".bottom-nav").hidden = false;
   document
     .querySelectorAll(".nav-item")
     .forEach((b) =>
@@ -218,6 +224,9 @@ function render() {
       : hero() + tabs() + (state.view === "calendar" ? calendar() : timeline());
   hydrateImages();
   bindMain();
+  document.querySelector("#familyMembers")?.addEventListener("click", openFamilyMembers);
+  document.querySelector("#babyProfile")?.addEventListener("click", openBabyProfile);
+  document.querySelector("#switchIdentity")?.addEventListener("click", switchWebIdentity);
 }
 const sleep = (milliseconds) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -295,7 +304,7 @@ async function openDetail(id) {
   try {
     const m = await api(`/moments/${id}`);
     const comments = await api(`/moments/${id}/comments`);
-    overlay.innerHTML = `<section class="overlay-screen detail"><div class="detail-head"><div><h2>${esc(ageAt(m.baby.birthday, m.eventDate))}</h2><span class="muted">${localDay(m.eventDate)}</span></div><button class="close" data-close>×</button></div><div class="detail-media">${m.assets.map((a, i) => (a.assetType === "VIDEO" ? `<button class="video-thumb has-poster" data-gallery="${i}"><img data-asset="${a.immichAssetId}" data-size="thumbnail" alt="视频封面处理中"><span>▶ 视频</span></button>` : `<img data-asset="${a.immichAssetId}" data-size="preview" data-gallery="${i}" alt="照片处理中">`)).join("")}</div><div class="detail-text">${esc(m.content || "")}</div>${m.location ? `<p class="muted">⌖ ${esc(m.location)}</p>` : ""}<div class="actions"><button id="detailLike" class="${m.likedByMe ? "liked" : ""}">♡ ${m._count.likes}</button>${m.canEdit ? '<button id="deleteMoment" class="danger">删除</button>' : ""}</div><section class="comments"><h3>家人留言</h3><div>${comments.items.map((c) => `<div class="comment"><b>${esc(c.user?.nickname || "家人")}</b>${esc(c.content)}</div>`).join("") || '<p class="muted">还没有留言</p>'}</div><form class="comment-form"><input maxlength="2000" placeholder="写留言…"><button>发送</button></form></section></section>`;
+    overlay.innerHTML = `<section class="overlay-screen detail"><div class="detail-head"><div><h2>${esc(ageAt(m.baby.birthday, m.eventDate))}</h2><span class="muted">${localDay(m.eventDate)}</span></div><button class="close" data-close>×</button></div><div class="detail-media">${m.assets.map((a,i) => detailAssetTile(a,i,m.canEdit)).join("")}</div><div class="detail-text">${esc(m.content || "")}</div>${m.location ? `<p class="muted">⌖ ${esc(m.location)}</p>` : ""}<div class="actions"><button id="detailLike" class="${m.likedByMe ? "liked" : ""}">♡ ${m._count.likes}</button>${m.canEdit ? '<button id="deleteMoment" class="danger">删除</button>' : ""}</div><section class="comments"><h3>家人留言</h3><div>${comments.items.map((c) => `<div class="comment"><b>${esc(c.user?.nickname || "家人")}</b>${esc(c.content)}</div>`).join("") || '<p class="muted">还没有留言</p>'}</div><form class="comment-form"><input maxlength="2000" placeholder="写留言…"><button>发送</button></form></section></section>`;
     hydrateImages(overlay);
     overlay.querySelector("[data-close]").onclick = () => {
       const savedScroll = window.scrollY;
@@ -319,6 +328,7 @@ async function openDetail(id) {
       openDetail(m.id);
       await loadMoments(true);
     };
+    bindAssetLongPress(m);
     const del = overlay.querySelector("#deleteMoment");
     if (del)
       del.onclick = async () => {
@@ -469,7 +479,7 @@ async function mediaCapturedAt(file) {
           const length = view.getUint16(offset + 2);
           if (marker === 0xffe1 && length >= 8) {
             const parsed = exifDate(view, offset + 10);
-            if (parsed) return parsed;
+            if (validCaptureDate(parsed)) return parsed;
           }
           if (length < 2) break;
           offset += 2 + length;
@@ -477,8 +487,9 @@ async function mediaCapturedAt(file) {
       }
     } catch (_) {}
   }
-  const fallback = new Date(file.lastModified);
-  return Number.isNaN(fallback.getTime()) ? null : fallback;
+  if (file.type.startsWith('video/')) return movieCapturedAt(file);
+  // A file modification timestamp is not proof of capture time (Safari often uses selection time).
+  return null;
 }
 
 function exifDate(view, tiff) {
@@ -531,7 +542,7 @@ document.querySelectorAll(".nav-item").forEach(
       render();
     }),
 );
-document.querySelector("#publishButton").onclick = openPublish;
+document.querySelector("#publishButton").onclick = () => openGroupedPublish();
 if ("serviceWorker" in navigator)
   navigator.serviceWorker.register("/web/service-worker.js").catch(() => {});
 start();

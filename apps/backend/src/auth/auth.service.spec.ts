@@ -13,6 +13,7 @@ describe('AuthService', () => {
 
   async function createService(password = 'correct-password') {
     const prisma = {
+      familyMember: { findFirst: jest.fn().mockResolvedValue({id:'member'}) },
       user: {
         findUnique: jest.fn().mockResolvedValue({
           ...user,
@@ -64,6 +65,11 @@ describe('AuthService', () => {
   it('rejects an invalid home app key', async () => {
     const { service } = await createService();
     await expect(service.home('wrong-key')).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+  it('selects the requested family identity only with a valid home key', async () => {
+    const { service, prisma } = await createService();
+    await service.home('home-access-key-at-least-32-characters-long', 'dad');
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({where:{username:'dad'}});
   });
 
   it('rotates refresh tokens atomically', async () => {

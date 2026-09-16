@@ -45,6 +45,7 @@ fun MomentDto.albumDate(): LocalDate =
 fun TimelineScreen(
     onMoment: (String) -> Unit,
     viewModel: TimelineViewModel,
+    onEditBaby: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var calendar by rememberSaveable { mutableStateOf(false) }
@@ -64,12 +65,17 @@ fun TimelineScreen(
     LaunchedEffect(shouldLoadMore, state.nextCursor) {
         if (shouldLoadMore && state.nextCursor != null) viewModel.loadMore()
     }
-    LaunchedEffect(state.scrollTargetDate, state.moments.size) {
+    LaunchedEffect(state.scrollTargetDate, state.moments.size, state.loadingMore, state.loading) {
         val target = state.scrollTargetDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
         if (target != null && !state.loading) {
             val momentIndex = state.moments.indexOfFirst { it.albumDate() == target }
-            if (momentIndex >= 0) listState.scrollToItem(momentIndex + 2)
-            viewModel.consumeScrollTarget()
+            if (momentIndex >= 0) {
+                calendar = false
+                listState.scrollToItem(momentIndex + 2)
+                viewModel.consumeScrollTarget()
+            } else if (state.nextCursor != null && state.error == null) {
+                viewModel.loadMore()
+            } else if (state.nextCursor == null) viewModel.consumeScrollTarget()
         }
     }
     if (indexOpen) {
@@ -111,6 +117,8 @@ fun TimelineScreen(
                             // 头像只能来自宝宝资料，不能跟随最新动态照片变化。
                             avatarUrl = state.avatarUrl,
                             refreshVersion = state.refreshVersion,
+                            onEdit = onEditBaby,
+                            canEdit = state.baby?.canEdit == true,
                         )
                     }
                     if (!calendar) {
@@ -225,10 +233,14 @@ private fun BabyProfileCard(
     birthday: LocalDate?,
     avatarUrl: String?,
     refreshVersion: Int,
+    onEdit: () -> Unit,
+    canEdit: Boolean,
 ) {
     val today = LocalDate.now()
     val shape = RoundedCornerShape(28.dp)
     Card(
+        onClick = onEdit,
+        enabled = canEdit,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp)
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .65f), shape),
         shape = shape,
@@ -251,6 +263,7 @@ private fun BabyProfileCard(
                 }
                 Column(Modifier.padding(start = 16.dp).weight(1f)) {
                     Text(name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    if (canEdit) Text("编辑名片 ›", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.height(4.dp))
                     Text(
                         birthday?.let { BabyAgeCalculator.format(it, today) }.orEmpty(),

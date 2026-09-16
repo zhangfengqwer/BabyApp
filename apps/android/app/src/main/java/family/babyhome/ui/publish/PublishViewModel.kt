@@ -8,7 +8,9 @@ import family.babyhome.data.immich.ImmichRepository
 import family.babyhome.data.immich.LocalMedia
 import family.babyhome.data.network.CreateMomentAssetRequest
 import family.babyhome.domain.publish.PublishRepository
+import family.babyhome.domain.publish.PublishDatePlanner
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,6 +39,10 @@ data class PublishUiState(
     val publishing: Boolean = false,
     val message: String? = null,
     val published: Boolean = false,
+    val automaticDates: Boolean = true,
+    val readingMedia: Boolean = false,
+    val completedDates: Set<String> = emptySet(),
+    val publishedDate: String? = null,
 )
 
 @HiltViewModel
@@ -47,38 +53,45 @@ class PublishViewModel @Inject constructor(
     private val _state = MutableStateFlow(PublishUiState())
     val state: StateFlow<PublishUiState> = _state.asStateFlow()
 
-    fun content(value: String) = _state.update { it.copy(content = value, message = null) }
-    fun location(value: String) = _state.update { it.copy(location = value, message = null) }
-    fun eventDate(value: String) = _state.update { it.copy(eventDate = value, message = null) }
+    private fun editable() = !_state.value.publishing && _state.value.completedDates.isEmpty()
+    fun content(value: String) { if (editable()) _state.update { it.copy(content = value, message = null) } }
+    fun location(value: String) { if (editable()) _state.update { it.copy(location = value, message = null) } }
+    fun eventDate(value: String) { if (editable()) _state.update { it.copy(eventDate = value, message = null) } }
+    fun automaticDates(value: Boolean) { if (editable()) _state.update { it.copy(automaticDates = value) } }
 
-    fun addUris(uris: List<Uri>) {
+    fun addUris(uris: List<Uri>) = viewModelScope.launch {
+        if (!editable() || _state.value.readingMedia) return@launch
+        _state.update { it.copy(readingMedia = true) }
+        try {
         val existing = _state.value.items.map { it.media.uri }.toSet()
-        val additions = uris.filterNot(existing::contains).map { PublishMediaItem(immich.describe(it)) }
-        val capturedDate = additions.firstNotNullOfOrNull { item ->
-            item.media.capturedAt?.atZone(ZoneId.systemDefault())?.toLocalDate()
+        val additions = withContext(Dispatchers.IO) {
+            uris.distinct().filterNot(existing::contains).map { PublishMediaItem(immich.describe(it)) }
         }
         // 相册里的同一天可能有很多张照片；不要在这里截断用户选择的媒体。
         _state.update {
             it.copy(
                 items = it.items + additions,
-                eventDate = capturedDate?.toString() ?: it.eventDate,
-                message = if (capturedDate != null) "已按照片拍摄时间选择日期" else null,
+                message = "已读取媒体时间，拍摄时间不明的文件使用手选日期",
             )
+        }
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            _state.update { it.copy(message = "无法读取所选媒体，请重新选择") }
+        } finally {
+            _state.update { it.copy(readingMedia = false) }
         }
     }
 
     fun remove(uri: Uri) = _state.update { state ->
-        if (state.publishing) state else state.copy(items = state.items.filterNot { it.media.uri == uri })
+        if (state.publishing || state.completedDates.isNotEmpty()) state else state.copy(items = state.items.filterNot { it.media.uri == uri })
     }
 
     fun publish() = viewModelScope.launch {
         val initial = _state.value
-        if (initial.publishing) return@launch
-        val eventInstant = runCatching {
-            val date = LocalDate.parse(initial.eventDate)
-            require(!date.isAfter(LocalDate.now()))
-            date.atStartOfDay(ZoneId.systemDefault()).toInstant().toString()
-        }.getOrElse {
+        if (initial.publishing || initial.readingMedia) return@launch
+        val grouped = initial.items.groupBy { PublishDatePlanner.date(it.media.capturedAt, initial.eventDate, initial.automaticDates) }
+        val dates = grouped.keys.ifEmpty { setOf(initial.eventDate) }
+        runCatching { PublishDatePlanner.validate(dates) }.getOrElse {
             _state.update { it.copy(message = "请选择正确的事件日期，不能晚于今天") }
             return@launch
         }
@@ -116,16 +129,25 @@ class PublishViewModel @Inject constructor(
             }
             return@launch
         }
-        val assets = current.items.mapIndexed { index, item ->
+        val groups = current.items.groupBy { PublishDatePlanner.date(it.media.capturedAt, current.eventDate, current.automaticDates) }
+        for (date in dates.sorted()) {
+            if (date in _state.value.completedDates) continue
+            val assets = groups[date].orEmpty().mapIndexed { index, item ->
             CreateMomentAssetRequest(
                 immichAssetId = requireNotNull(item.assetId),
                 assetType = if (item.media.mimeType.startsWith("video/")) "VIDEO" else "IMAGE",
                 sortOrder = index,
             )
         }
-        publishRepository.createMoment(current.content, current.location, assets, eventInstant)
-            .onSuccess { _state.update { it.copy(publishing = false, published = true, message = "发布成功") } }
-            .onFailure { _state.update { it.copy(publishing = false, message = "媒体已上传，但动态创建失败；请点击重试，不会重复上传") } }
+            val eventInstant = LocalDate.parse(date).atStartOfDay(ZoneId.systemDefault()).toInstant().toString()
+            val result = publishRepository.createMoment(current.content, current.location, assets, eventInstant)
+            if (result.isFailure) {
+                _state.update { it.copy(publishing = false, message = "$date 发布失败，已成功的日期会保留；点击重试继续，不会重复上传") }
+                return@launch
+            }
+            _state.update { it.copy(completedDates = it.completedDates + date) }
+        }
+        _state.update { it.copy(publishing = false, published = true, publishedDate = dates.maxOrNull(), message = "已发布 ${dates.size} 个日期") }
     }
 
     private fun updateItem(index: Int, transform: (PublishMediaItem) -> PublishMediaItem) {

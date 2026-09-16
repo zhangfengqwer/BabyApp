@@ -3,6 +3,7 @@ import { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { CreateMomentDto } from './dto/create-moment.dto';
+import { EditBabyDto } from './dto/edit-baby.dto';
 
 @Injectable()
 export class BabiesService {
@@ -15,7 +16,23 @@ export class BabiesService {
         : { familyMembers: { some: { userId: user.id } } },
       orderBy: { createdAt: 'asc' },
     });
-    return { success: true, data: babies };
+    return { success: true, data: babies.map(baby => ({ ...baby, canEdit: user.role === UserRole.ADMIN })) };
+  }
+
+  async edit(user: AuthenticatedUser, babyId: string, dto: EditBabyDto) {
+    if (user.role !== UserRole.ADMIN) throw new ForbiddenException('只有管理员可以编辑宝宝资料');
+    await this.requireAccess(user, babyId);
+    const birthday = new Date(`${dto.birthday}T00:00:00Z`);
+    const today = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    if (!dto.name.trim() || Number.isNaN(birthday.getTime()) || birthday.toISOString().slice(0, 10) !== dto.birthday || dto.birthday > today) {
+      throw new BadRequestException('请填写姓名和正确的出生日期，生日不能晚于今天');
+    }
+    const baby = await this.prisma.baby.update({ where: { id: babyId }, data: {
+      name: dto.name.trim(), nickname: dto.nickname?.trim() || null,
+      birthday, description: dto.description?.trim() || null,
+      ...(dto.avatarAssetId ? { avatarAssetId: dto.avatarAssetId } : {}),
+    } });
+    return { success: true, data: { ...baby, canEdit: true } };
   }
 
   async moments(user: AuthenticatedUser, babyId: string, cursor?: string, limit = 20) {
@@ -38,8 +55,11 @@ export class BabiesService {
       },
     });
     const hasMore = rows.length > take;
+    const members = await this.prisma.familyMember.findMany({where:{babyId}});
+    const names = new Map(members.map(m=>[m.userId,m.relationship]));
     const items = rows.slice(0, take).map(({ likes, ...moment }) => ({
       ...moment,
+      author: { ...moment.author, nickname: Array.from(new Set([moment.authorId,...moment.contributorIds].map(id=>names.get(id) || (id===moment.authorId ? moment.author.nickname : '家人')))).join('、') },
       likedByMe: likes.length > 0,
     }));
     return {
@@ -68,12 +88,17 @@ export class BabiesService {
       const existingAssetIds = new Set(existing.assets.map((asset) => asset.immichAssetId));
       const additions = uniqueAssets.filter((asset) => !existingAssetIds.has(asset.immichAssetId));
       const nextSortOrder = existing.assets.reduce((max, asset) => Math.max(max, asset.sortOrder), -1) + 1;
-      const contents = [existing.content?.trim(), dto.content?.trim()].filter(Boolean);
+      const originalContent = existing.content?.trim() || '';
+      const incomingContent = dto.content?.trim() || '';
+      const content = !incomingContent || originalContent === incomingContent || originalContent.endsWith(`\n${incomingContent}`)
+        ? originalContent
+        : [originalContent, incomingContent].filter(Boolean).join('\n');
       const locations = Array.from(new Set([existing.location?.trim(), dto.location?.trim()].filter(Boolean)));
       const moment = await this.prisma.moment.update({
         where: { id: existing.id },
         data: {
-          content: contents.length ? Array.from(new Set(contents)).join('\n') : null,
+          contributorIds: Array.from(new Set([existing.authorId,...(existing.contributorIds || []),user.id].filter(Boolean))),
+          content: content || null,
           location: locations.length ? locations.join('、').slice(0, 255) : null,
           assets: {
             create: additions.map((asset, index) => ({ ...asset, sortOrder: nextSortOrder + index })),
@@ -87,6 +112,7 @@ export class BabiesService {
       data: {
         babyId,
         authorId: user.id,
+        contributorIds: [user.id],
         content: dto.content?.trim() || null,
         eventDate,
         location: dto.location?.trim() || null,

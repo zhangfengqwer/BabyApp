@@ -24,28 +24,30 @@ export class AuthService {
     return this.issueTokenPair(user);
   }
 
-  async home(accessKey?: string) {
+  async home(accessKey?: string, selectedUsername?: string) {
     const expectedKey = this.requiredSecret('HOME_ACCESS_KEY');
     const received = Buffer.from(accessKey ?? '');
     const expected = Buffer.from(expectedKey);
     if (received.length !== expected.length || !timingSafeEqual(received, expected)) {
       throw new UnauthorizedException('家庭访问认证失败');
     }
-    const username = this.config.get<string>('INITIAL_ADMIN_USERNAME')?.trim();
+    const username = selectedUsername?.trim() || this.config.get<string>('INITIAL_ADMIN_USERNAME')?.trim();
     if (!username) throw new UnauthorizedException('家庭账号未配置');
     const user = await this.prisma.user.findUnique({ where: { username } });
     if (!user) throw new UnauthorizedException('家庭账号不存在');
+    if (user.role !== 'ADMIN' && !await this.prisma.familyMember.findFirst({where:{userId:user.id}})) throw new UnauthorizedException('此账号不是家庭成员');
     return this.issueTokenPair(user);
   }
 
-  async webHome(remoteAddress?: string) {
+  async webHome(remoteAddress?: string, selectedUsername?: string) {
     if (!this.isPrivateNetworkAddress(remoteAddress)) {
       throw new UnauthorizedException('家庭网页仅允许从家庭网络或 Tailscale 访问');
     }
-    const username = this.config.get<string>('INITIAL_ADMIN_USERNAME')?.trim();
+    const username = selectedUsername?.trim() || this.config.get<string>('INITIAL_ADMIN_USERNAME')?.trim();
     if (!username) throw new UnauthorizedException('家庭账号未配置');
     const user = await this.prisma.user.findUnique({ where: { username } });
     if (!user) throw new UnauthorizedException('家庭账号不存在');
+    if (selectedUsername && user.role !== 'ADMIN' && !await this.prisma.familyMember.findFirst({where:{userId:user.id}})) throw new UnauthorizedException('此账号不是家庭成员');
     return this.issueTokenPair(user);
   }
 

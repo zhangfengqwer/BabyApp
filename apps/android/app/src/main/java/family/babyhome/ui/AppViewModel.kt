@@ -9,6 +9,8 @@ import family.babyhome.data.settings.TAILSCALE_BABY_SERVER_URL
 import family.babyhome.domain.auth.AuthRepository
 import family.babyhome.update.AppRelease
 import family.babyhome.update.AppUpdateManager
+import family.babyhome.data.family.FamilyRepository
+import family.babyhome.data.network.FamilyUser
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +27,9 @@ data class AppUiState(
     val update: AppRelease? = null,
     val updating: Boolean = false,
     val updateError: String? = null,
+    val selectingIdentity: Boolean = false,
+    val members: List<FamilyUser> = emptyList(),
+    val identity: FamilyUser? = null,
 )
 
 @HiltViewModel
@@ -32,6 +37,7 @@ class AppViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val configStore: ServerConfigStore,
     private val updateManager: AppUpdateManager,
+    private val family: FamilyRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(AppUiState())
     val state: StateFlow<AppUiState> = _state.asStateFlow()
@@ -41,12 +47,13 @@ class AppViewModel @Inject constructor(
     fun connect() = viewModelScope.launch {
         _state.value = AppUiState(connecting = true)
         try {
+            val username = configStore.identity.first()
             val lanServerUrl = configStore.config.first().babyServerUrl.trimEnd('/')
             val candidates = listOf(lanServerUrl, TAILSCALE_BABY_SERVER_URL).distinct()
             var connectedServerUrl: String? = null
             var lastError: Throwable? = null
             for (serverUrl in candidates) {
-                val attempt = authRepository.homeLogin(serverUrl, BuildConfig.HOME_ACCESS_KEY)
+                val attempt = authRepository.homeLogin(serverUrl, BuildConfig.HOME_ACCESS_KEY, username)
                 if (attempt.isSuccess) {
                     connectedServerUrl = serverUrl
                     break
@@ -55,7 +62,8 @@ class AppViewModel @Inject constructor(
             }
             if (connectedServerUrl == null) throw lastError ?: IllegalStateException("No server available")
             configStore.selectBabyServer(connectedServerUrl)
-            _state.value = AppUiState(connecting = false, connected = true)
+            val members = family.load().members
+            _state.value = AppUiState(connecting = false, connected = username != null, selectingIdentity = username == null, members = members, identity = members.firstOrNull { it.username == username })
             checkForUpdate(connectedServerUrl)
         } catch (error: Throwable) {
             if (error is CancellationException) throw error
@@ -65,6 +73,8 @@ class AppViewModel @Inject constructor(
             )
         }
     }
+    fun selectIdentity(username: String) = viewModelScope.launch { configStore.saveIdentity(username); connect() }
+    fun switchIdentity() = viewModelScope.launch { configStore.saveIdentity(null); authRepository.logout(); connect() }
 
     fun dismissUpdate() = _state.update { it.copy(update = null, updateError = null) }
 

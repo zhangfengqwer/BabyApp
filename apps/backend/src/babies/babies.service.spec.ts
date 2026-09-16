@@ -71,4 +71,19 @@ describe('BabiesService permissions', () => {
     expect(result.data.id).toBe('existing');
     expect(prisma.moment.update).toHaveBeenCalledTimes(1);
   });
+
+  it('does not append the same text again when a publication is retried', async () => {
+    const prisma = {
+      baby: { findUnique: jest.fn().mockResolvedValue({ id: 'baby', familyMembers: [{ id: 'member' }] }) },
+      moment: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'existing', content: `上午\n${dto.content}`, location: null, assets: dto.assets }),
+        update: jest.fn().mockResolvedValue({ id: 'existing' }),
+      },
+    };
+    await new BabiesService(prisma as never).createMoment(
+      { id: 'user', username: 'dad', nickname: '爸爸', role: UserRole.PARENT }, 'baby', dto,
+    );
+    expect(prisma.moment.update.mock.calls[0][0].data.content).toBe(`上午\n${dto.content}`);
+    expect(prisma.moment.update.mock.calls[0][0].data.assets.create).toEqual([]);
+  });
 });

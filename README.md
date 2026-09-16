@@ -4,6 +4,14 @@ Baby Home 是一个完全自托管的家庭成长相册。Android App 和 iPhone
 
 ## 当前进度
 
+Android 0.4.32 / versionCode 33 已构建测试通过并发布：详情页媒体长按后在右上角显示红色圆形减号，点击仍需确认；普通点击浏览不受影响，只移除业务关联，不删除 Immich 原文件。
+
+Android 0.4.30 / versionCode 31 已发布：首次选择家庭身份，之后设备记住用户名并免密码进入；我的 → 家庭成员可查看关系，管理员可添加家人和编辑关系。时光轴/详情显示当天参与发布人的关系，评论显示真实评论账号的关系。按用户要求，现有管理员关系已设置为爸爸，用户名和 ADMIN 权限保留。此免密码选择不防冒充，只适合可信家庭设备。Android 构建/测试通过，后端 24 项测试通过，详见 [家庭成员](docs/family-members.md)。
+
+2026-09-16：Android 0.4.29 / versionCode 30 已成功构建并发布，13 项 Android 单元测试通过。发布页增加本地视频帧预览；1904 年 QuickTime 零时间和其他无效媒体时间按“拍摄时间不明”处理，不覆盖手选备用日期。详情页支持独立移除照片/视频，后端限制管理权限且只删除 MomentAsset 关联，不删除 Immich 原文件。配套后端编译及 21 项测试通过。
+
+Android 0.4.28 加入重新设计的发布页和宝宝名片编辑页：媒体默认按各自拍摄日期分组发布，同一天继续追加到同一个 Moment；可关闭自动分组统一使用手选日期。未知拍摄时间的媒体使用手选日期，发布前可查看分组，部分日期成功后重试只继续剩余日期。宝宝姓名、昵称、生日、简介和固定头像可由管理员编辑。2026-09-16 已通过 Android APK 编译及 10 项单元测试，0.4.28 / versionCode 29 已发布至自动更新目录；后端编译与 19 项测试通过。详见 [发布与名片编辑](docs/publish-profile.md)。
+
 0.4.10 将包含：安装名称“之之成长手册”、局域网自动认证、原创启动图标、日历直达详情、详情媒体整组左右滑动、发布/删除后主页强制刷新、单次选择超过 10 个媒体、滚到底自动分页，以及重新设计的时光轴界面。顶部标题和页签会随内容滚动收起，宝宝名片使用干净的中性色卡片，底部导航使用新的图标与选中样式。宝宝头像只读取宝宝资料中的固定头像，不再使用最新动态照片；刚上传媒体的缩略图未就绪时会自动重试。
 
 已加入原创“黄色小屋＋宝宝笑脸＋相册页”启动图标，设计源文件位于 `apps/android/design/app-icon-source.png`，APK 使用各 Android 屏幕密度对应的 mipmap 图标。
@@ -147,6 +155,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-android-
 ```
 
 日志写入根目录 `android-build.log`，退出码写入 `android-build-exit.txt`，两者均不会提交到版本控制。构建成功后，脚本还会把最新版复制为 `releases/zhizhi-growth-latest.apk` 并生成带 SHA-256 的 `releases/version.json`。App 登录家庭服务器后会自动检查更高版本，下载校验后调用 Android 系统安装器。
+
+若 Windows JDK 报 `Unable to establish loopback connection` 且栈包含 `UnixDomainSockets.connect`，优先使用上述辅助脚本。脚本为所有 Java 子进程配置项目专用 `.gradle-sockets` 目录（`jdk.net.unixdomain.tmpdir`），避免系统 Temp 下的 Unix-domain socket 兼容性故障。2026-09-16 已通过 TCP/NIO Pipe/Selector 最小测试及完整 Gradle 构建验证，不需要关闭防火墙、重装 Docker 或清空 Gradle 缓存。
 
 Debug APK 输出位置：
 

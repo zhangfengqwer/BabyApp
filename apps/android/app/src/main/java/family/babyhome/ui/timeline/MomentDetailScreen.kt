@@ -1,18 +1,28 @@
 package family.babyhome.ui.timeline
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import coil.compose.AsyncImage
+import family.babyhome.data.network.MomentAssetDto
 import family.babyhome.domain.baby.BabyAgeCalculator
 import java.time.LocalDate
 
@@ -32,10 +42,18 @@ fun MomentDetailScreen(
     var editing by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     var choosingCover by remember { mutableStateOf(false) }
+    var removingAsset by remember { mutableStateOf<MomentAssetDto?>(null) }
+    var deleteVisibleId by remember { mutableStateOf<String?>(null) }
     var text by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
-    BackHandler(onBack = onBack)
+    BackHandler { if (deleteVisibleId != null) deleteVisibleId = null else onBack() }
     LaunchedEffect(detail.deleted) { if (detail.deleted) onDeleted() }
+    removingAsset?.let { asset ->
+        AlertDialog(onDismissRequest = { removingAsset = null }, title = { Text("删除这个${if (asset.assetType == "VIDEO") "视频" else "照片"}？") },
+            text = { Text("只从这一天的时光轴移除，其他照片、视频和留言不受影响，Immich 原文件仍保留。") },
+            confirmButton = { TextButton(onClick = { viewModel.removeAsset(asset.id); removingAsset = null; deleteVisibleId = null }, enabled = !detail.busy) { Text("删除") } },
+            dismissButton = { TextButton(onClick = { removingAsset = null }) { Text("取消") } })
+    }
     if(editing) AlertDialog(onDismissRequest={editing=false},title={Text("编辑记录")},text={
         Column { OutlinedTextField(text,{text=it},label={Text("文字")}); OutlinedTextField(location,{location=it},label={Text("地点")}) }
     },confirmButton={TextButton(onClick={viewModel.edit(text,location);editing=false}){Text("保存")}},
@@ -61,8 +79,10 @@ fun MomentDetailScreen(
         LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
             item {
                 moment.assets.firstOrNull()?.let { cover ->
-                    AsyncImage(cover.thumbnailUrl, "封面，点击查看", modifier = Modifier.fillMaxWidth().height(260.dp)
-                        .clickable { onAsset(0) }, contentScale = ContentScale.Crop)
+                    DetailMediaTile(cover, moment.canEdit && !detail.busy, deleteVisibleId == cover.id,
+                        onOpen = { deleteVisibleId = null; onAsset(0) },
+                        onLongPress = { deleteVisibleId = cover.id }, onDelete = { removingAsset = cover },
+                        modifier = Modifier.fillMaxWidth().height(260.dp))
                 }
                 Column(Modifier.padding(20.dp)) {
                     Text(state.baby?.let { BabyAgeCalculator.format(LocalDate.parse(it.birthday.take(10)), moment.albumDate()) }.orEmpty(),
@@ -74,11 +94,10 @@ fun MomentDetailScreen(
                 item {
                     Row(Modifier.padding(horizontal = 16.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         row.forEachIndexed { columnIndex, asset ->
-                            Card(onClick = { onAsset(rowIndex * 3 + columnIndex) }, modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp)) {
-                                AsyncImage(asset.thumbnailUrl, "点击查看照片或视频", modifier = Modifier.fillMaxWidth().aspectRatio(1f), contentScale = ContentScale.Crop)
-                                if (asset.assetType == "VIDEO") Text("▶ 视频", Modifier.padding(4.dp))
-                            }
+                            DetailMediaTile(asset, moment.canEdit && !detail.busy, deleteVisibleId == asset.id,
+                                onOpen = { deleteVisibleId = null; onAsset(rowIndex * 3 + columnIndex) },
+                                onLongPress = { deleteVisibleId = asset.id }, onDelete = { removingAsset = asset },
+                                modifier = Modifier.weight(1f).aspectRatio(1f))
                         }
                         repeat(3-row.size) { Spacer(Modifier.weight(1f)) }
                     }
@@ -106,6 +125,38 @@ fun MomentDetailScreen(
                     if(detail.cursor != null) TextButton(onClick=viewModel::moreComments,enabled=!detail.busy){Text("更早留言")}
                     OutlinedTextField(commentText,{commentText=it},label={Text("写评论…")},modifier=Modifier.fillMaxWidth())
                     Button(onClick={viewModel.comment(commentText);commentText=""},enabled=!detail.busy && commentText.isNotBlank()){Text("发送")}
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DetailMediaTile(
+    asset: MomentAssetDto, canDelete: Boolean, showDelete: Boolean,
+    onOpen: () -> Unit, onLongPress: () -> Unit, onDelete: () -> Unit, modifier: Modifier,
+) {
+    Card(modifier = modifier.combinedClickable(
+        onClick = onOpen,
+        onLongClick = if (canDelete) onLongPress else null,
+        onLongClickLabel = if (canDelete) "显示删除按钮" else null,
+    ), shape = RoundedCornerShape(10.dp)) {
+        Box(Modifier.fillMaxSize()) {
+            AsyncImage(asset.thumbnailUrl, if (asset.assetType == "VIDEO") "查看视频" else "查看照片",
+                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            if (asset.assetType == "VIDEO") Surface(Modifier.align(Alignment.BottomStart), color = MaterialTheme.colorScheme.surface.copy(alpha = .8f)) {
+                Text("▶ 视频", Modifier.padding(4.dp), style = MaterialTheme.typography.labelMedium)
+            }
+            if (canDelete && showDelete) {
+                IconButton(onClick = onDelete, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(48.dp).semantics {
+                    contentDescription = if (asset.assetType == "VIDEO") "删除这个视频" else "删除这张照片"
+                }) {
+                    Surface(Modifier.size(28.dp), color = Color(0xDD302C28), shape = CircleShape) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("−", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }

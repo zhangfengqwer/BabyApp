@@ -14,9 +14,9 @@ class DefaultAuthRepository @Inject constructor(
 ) : AuthRepository {
     override fun isLoggedIn() = !tokens.accessToken().isNullOrBlank()
 
-    override suspend fun homeLogin(serverUrl: String, accessKey: String) = runCatching {
+    override suspend fun homeLogin(serverUrl: String, accessKey: String, username: String?) = runCatching {
         val baseUrl = DefaultServerSettingsRepository.normalizeServerUrl(serverUrl)
-        val response = api.homeLogin("$baseUrl/auth/home", accessKey)
+        val response = api.homeLogin("$baseUrl/auth/home", accessKey, username)
         tokens.save(response.data.accessToken, response.data.refreshToken)
         response.data.user
     }

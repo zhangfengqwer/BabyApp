@@ -22,8 +22,13 @@ class ServerConfigStore @Inject constructor(
     private val selectedBabyServerUrl = MutableStateFlow<String?>(null)
 
     private object Keys {
+        val identity = stringPreferencesKey("family_username")
         val babyServerUrl = stringPreferencesKey("baby_server_url")
         val immichUrl = stringPreferencesKey("immich_url")
+    }
+    val identity: Flow<String?> = context.serverSettingsDataStore.data.map { it[Keys.identity] }
+    suspend fun saveIdentity(username: String?) {
+        context.serverSettingsDataStore.edit { if (username == null) it.remove(Keys.identity) else it[Keys.identity] = username }
     }
 
     val config: Flow<ServerConfig> = context.serverSettingsDataStore.data.map { preferences ->

@@ -14,13 +14,13 @@ export class AuthController {
   }
 
   @Post('home')
-  home(@Headers('x-home-access-key') accessKey?: string) {
-    return this.auth.home(accessKey);
+  home(@Headers('x-home-access-key') accessKey?: string, @Headers('x-family-username') username?: string) {
+    return this.auth.home(accessKey, username);
   }
 
   @Post('web-home')
-  webHome(@Req() request: Request) {
-    return this.auth.webHome(request.socket.remoteAddress);
+  webHome(@Req() request: Request, @Headers('x-family-username') username?: string) {
+    return this.auth.webHome(request.socket.remoteAddress, username);
   }
 
   @Post('refresh')

@@ -27,4 +27,17 @@ describe('Moment access and mutations', () => {
     await expect(service.edit({...user,role:'ADMIN'},'moment',{coverAssetId:'different'})).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
+  it('denies individual media removal to FAMILY', async () => {
+    const { service } = setup(record());
+    await expect(service.removeAsset(user, 'moment', 'link')).rejects.toBeInstanceOf(ForbiddenException);
+  });
+  it('removes only the specified business media association', async () => {
+    const prisma = {
+      moment: { findUnique: jest.fn().mockResolvedValue(record()), delete: jest.fn() },
+      momentAsset: { deleteMany: jest.fn() },
+    };
+    await new MomentsService(prisma as never).removeAsset({ ...user, role: 'ADMIN' }, 'moment', 'link');
+    expect(prisma.momentAsset.deleteMany).toHaveBeenCalledWith({ where: { id: 'link', momentId: 'moment' } });
+    expect(prisma.moment.delete).not.toHaveBeenCalled();
+  });
 });

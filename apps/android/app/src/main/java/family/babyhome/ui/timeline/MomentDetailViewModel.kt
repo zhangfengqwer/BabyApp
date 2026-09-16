@@ -51,6 +51,7 @@ class MomentDetailViewModel @Inject constructor(
     fun edit(content:String, location:String) = action { api.editMoment(url(),MomentEditRequest(content=content,location=location)); fetch() }
     fun cover(id:String) = action { api.editMoment(url(),MomentEditRequest(coverAssetId=id)); fetch() }
     fun delete() = action { api.deleteMoment(url()); mutable.update { it.copy(deleted=true) } }
+    fun removeAsset(assetId: String) = action { api.deleteMomentAsset(url()+"/assets/"+assetId); fetch() }
     fun moreComments() = action {
         val cursor=mutable.value.cursor
         if(cursor != null) {

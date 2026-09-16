@@ -11,6 +11,7 @@ import family.babyhome.data.network.BabyApiClient
 @HiltAndroidApp
 class BabyHomeApplication : Application(), ImageLoaderFactory {
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
+        .components { add(coil.decode.VideoFrameDecoder.Factory()) }
         .okHttpClient(BabyApiClient.createOkHttp(AuthInterceptor(TokenStore(this))))
         .build()
 }

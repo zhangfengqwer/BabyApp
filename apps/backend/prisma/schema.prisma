@@ -103,6 +103,7 @@ model Moment {
   id         String           @id @default(uuid()) @db.Uuid
   babyId     String           @db.Uuid
   authorId   String           @db.Uuid
+  contributorIds String[]     @default([]) @db.Uuid
   content    String?
   eventDate  DateTime         @db.Timestamptz(3)
   location   String?          @db.VarChar(255)

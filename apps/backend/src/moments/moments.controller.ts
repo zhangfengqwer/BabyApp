@@ -20,9 +20,9 @@ export class MomentsController {
   @Get(':id') detail(@CurrentUser() u:AuthenticatedUser,@Param('id',ParseUUIDPipe) id:string){return this.service.detail(u,id);}
   @Patch(':id') edit(@CurrentUser() u:AuthenticatedUser,@Param('id',ParseUUIDPipe) id:string,@Body() dto:MomentEditDto){return this.service.edit(u,id,dto);}
   @Delete(':id') remove(@CurrentUser() u:AuthenticatedUser,@Param('id',ParseUUIDPipe) id:string){return this.service.remove(u,id);}
+  @Delete(':id/assets/:assetId') removeAsset(@CurrentUser() u:AuthenticatedUser,@Param('id',ParseUUIDPipe) id:string,@Param('assetId',ParseUUIDPipe) assetId:string){return this.service.removeAsset(u,id,assetId);}
   @Get(':id/comments') comments(@CurrentUser() u:AuthenticatedUser,@Param('id',ParseUUIDPipe) id:string,@Query('cursor') cursor?:string){return this.service.comments(u,id,cursor);}
   @Post(':id/comments') comment(@CurrentUser() u:AuthenticatedUser,@Param('id',ParseUUIDPipe) id:string,@Body() dto:CommentDto){return this.service.comment(u,id,dto.content);}
   @Post(':id/like') like(@CurrentUser() u:AuthenticatedUser,@Param('id',ParseUUIDPipe) id:string){return this.service.like(u,id,true);}
   @Delete(':id/like') unlike(@CurrentUser() u:AuthenticatedUser,@Param('id',ParseUUIDPipe) id:string){return this.service.like(u,id,false);}
 }
-

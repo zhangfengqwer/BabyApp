@@ -3,8 +3,10 @@ package family.babyhome.data.immich
 import android.content.ContentResolver
 import android.database.Cursor
 import android.net.Uri
+import android.media.MediaMetadataRetriever
 import android.provider.OpenableColumns
 import androidx.exifinterface.media.ExifInterface
+import family.babyhome.domain.publish.MediaCaptureTime
 import family.babyhome.data.settings.ServerConfigStore
 import kotlinx.coroutines.flow.first
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -47,6 +49,23 @@ class ImmichRepository @Inject constructor(
     }
 
     private fun readCapturedAt(uri: Uri, mimeType: String): Instant? {
+        if (mimeType.startsWith("video/")) {
+            val videoTime = runCatching {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    resolver.openAssetFileDescriptor(uri, "r")?.use { file ->
+                        if (file.declaredLength >= 0) retriever.setDataSource(file.fileDescriptor, file.startOffset, file.declaredLength)
+                        else retriever.setDataSource(file.fileDescriptor)
+                        retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE)?.let {
+                            runCatching { Instant.parse(it) }.getOrElse { _ ->
+                                java.time.OffsetDateTime.parse(it, DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss.SSSX")).toInstant()
+                            }
+                        }
+                    }
+                } finally { retriever.release() }
+            }.getOrNull()
+            MediaCaptureTime.usable(videoTime)?.let { return it }
+        }
         if (mimeType.startsWith("image/")) {
             val exifInstant = runCatching {
                 resolver.openInputStream(uri)?.use { input ->
@@ -60,13 +79,13 @@ class ImmichRepository @Inject constructor(
                     }
                 }
             }.getOrNull()
-            if (exifInstant != null) return exifInstant
+            MediaCaptureTime.usable(exifInstant)?.let { return it }
         }
         return runCatching {
             resolver.query(uri, arrayOf(android.provider.MediaStore.Images.ImageColumns.DATE_TAKEN), null, null, null)?.use {
-                if (it.moveToFirst() && !it.isNull(0)) Instant.ofEpochMilli(it.getLong(0)) else null
+                if (it.moveToFirst() && !it.isNull(0) && it.getLong(0) > 0) Instant.ofEpochMilli(it.getLong(0)) else null
             }
-        }.getOrNull()
+        }.getOrNull().let { MediaCaptureTime.usable(it) }
     }
 
     suspend fun upload(media: LocalMedia, onProgress: (Float) -> Unit): Result<ImmichUploadResponse> = runCatching {
