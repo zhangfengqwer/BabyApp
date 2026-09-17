@@ -1,33 +1,48 @@
 <!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-  <meta name="theme-color" content="#fbf8f2">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="之之成长手册">
-  <title>之之成长手册</title>
-  <link rel="manifest" href="/web/manifest.webmanifest">
-  <link rel="icon" href="/web/icon.svg">
-  <link rel="apple-touch-icon" href="/web/icon.png">
-  <link rel="stylesheet" href="/web/styles.css">
-</head>
-<body>
-  <div id="app">
-    <main id="main">
-      <section class="startup"><span class="brand-mark">之</span><h1>之之成长手册</h1><p>正在打开家庭相册…</p></section>
-    </main>
-    <nav class="bottom-nav" aria-label="主导航">
-      <button class="nav-item active" data-view="timeline"><span>⌂</span><b>时光轴</b></button>
-      <button class="nav-item" data-view="calendar"><span>▦</span><b>日历</b></button>
-      <button class="nav-item" data-view="profile"><span>●</span><b>我的</b></button>
-    </nav>
-    <button id="publishButton" class="publish-fab" aria-label="发布成长动态">＋</button>
-  </div>
-  <div id="overlay"></div>
-  <div id="toast" role="status"></div>
-  <script src="/web/app.js" defer></script>
-  <script src="/web/features.js" defer></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"
+    />
+    <meta name="theme-color" content="#fbf8f2" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="之之成长手册" />
+    <title>之之成长手册</title>
+    <link rel="manifest" href="/web/manifest.webmanifest" />
+    <link rel="icon" href="/web/icon.svg" />
+    <link rel="apple-touch-icon" href="/web/icon.png" />
+    <link rel="stylesheet" href="/web/styles.css?v=0.4.33" />
+  </head>
+  <body>
+    <div id="app">
+      <main id="main">
+        <section class="startup">
+          <span class="brand-mark">之</span>
+          <h1>之之成长手册</h1>
+          <p>正在打开家庭相册…</p>
+        </section>
+      </main>
+      <nav class="bottom-nav" aria-label="主导航">
+        <button class="nav-item active" data-view="timeline">
+          <span>⌂</span><b>时光轴</b>
+        </button>
+        <button class="nav-item" data-view="calendar">
+          <span>▦</span><b>日历</b>
+        </button>
+        <button class="nav-item" data-view="profile">
+          <span>●</span><b>我的</b>
+        </button>
+      </nav>
+      <button id="publishButton" class="publish-fab" aria-label="发布成长动态">
+        ＋
+      </button>
+    </div>
+    <div id="overlay"></div>
+    <div id="toast" role="status"></div>
+    <script src="/web/app.js?v=0.4.33" defer></script>
+    <script src="/web/features.js?v=0.4.33" defer></script>
+  </body>
 </html>

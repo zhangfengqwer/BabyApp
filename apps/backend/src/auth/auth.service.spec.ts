@@ -71,6 +71,12 @@ describe('AuthService', () => {
     await service.home('home-access-key-at-least-32-characters-long', 'dad');
     expect(prisma.user.findUnique).toHaveBeenCalledWith({where:{username:'dad'}});
   });
+  it('selects a web family identity only from a private network', async () => {
+    const { service, prisma } = await createService();
+    await service.webHome('192.168.0.40', 'dad');
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({where:{username:'dad'}});
+    await expect(service.webHome('8.8.8.8', 'dad')).rejects.toBeInstanceOf(UnauthorizedException);
+  });
 
   it('rotates refresh tokens atomically', async () => {
     const { service, prisma } = await createService();
