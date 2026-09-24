@@ -27,8 +27,8 @@ android {
         applicationId = "family.babyhome"
         minSdk = 26
         targetSdk = 35
-        versionCode = 34
-        versionName = "0.4.33"
+        versionCode = 38
+        versionName = "0.4.37"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         buildConfigField("String", "HOME_ACCESS_KEY", "\"$homeAccessKey\"")

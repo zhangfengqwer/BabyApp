@@ -21,16 +21,101 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.SubcomposeAsyncImage
 import family.babyhome.domain.publish.PublishDatePlanner
 import java.time.LocalDate
+import android.Manifest
+import android.os.Build
+import android.content.pm.PackageManager
+import android.app.Activity
+import android.provider.MediaStore
+import android.util.Log
+import androidx.activity.result.IntentSenderRequest
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PublishScreen(onPublished: (String) -> Unit, onBack: () -> Unit = {}, viewModel: PublishViewModel = hiltViewModel()) {
+fun PublishScreen(onPublished: (String) -> Unit, onBack: () -> Unit = {}, birthday: String? = null, viewModel: PublishViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val locked = state.publishing || state.completedDates.isNotEmpty()
     val groups = state.items.groupBy { PublishDatePlanner.date(it.media.capturedAt, state.eventDate, state.automaticDates) }.toSortedMap(reverseOrder())
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(100)) { viewModel.addUris(it) }
-    LaunchedEffect(state.published) { if (state.published) onPublished(state.publishedDate ?: state.eventDate) }
+    var choosingMedia by remember { mutableStateOf(true) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(100)) { uris ->
+        viewModel.addUris(uris)
+        choosingMedia = false
+    }
+    var deletionIssue by remember { mutableStateOf<String?>(null) }
+    var cleanupLaunched by remember { mutableStateOf(false) }
+    var unsupportedDeletionCount by remember { mutableIntStateOf(0) }
+    var requestedDeleteUris by remember { mutableStateOf<List<android.net.Uri>>(emptyList()) }
+    val deleteLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            scope.launch {
+                val remaining = withContext(Dispatchers.IO) { requestedDeleteUris.count { LocalMediaDeletion.exists(context, it) } }
+                deletionIssue = when {
+                    remaining > 0 -> "系统确认已完成，但仍有 $remaining 个本地文件未删除。可在“我的”中重试清理。"
+                    unsupportedDeletionCount > 0 -> "$unsupportedDeletionCount 个系统相册文件只允许读取，请在相册中手动删除。"
+                    else -> null
+                }
+                if (deletionIssue == null) onPublished(state.publishedDate ?: state.eventDate)
+            }
+        }
+        else deletionIssue = "发布已经成功，但本地删除已取消。可在“我的”中重试清理。"
+    }
+    val mediaPermissions = remember {
+        when {
+            Build.VERSION.SDK_INT >= 34 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+            Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+            else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+    }
+    var permissionChecked by remember { mutableStateOf(false) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissionChecked = true }
+    LaunchedEffect(choosingMedia) {
+        if (choosingMedia && !permissionChecked) {
+            if (mediaPermissions.any { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }) permissionChecked = true
+            else permissionLauncher.launch(mediaPermissions)
+        }
+    }
+    LaunchedEffect(state.published) {
+        if (state.published && !cleanupLaunched) {
+            cleanupLaunched = true
+            PublishedMediaHistory.mark(context, state.items.map { it.media.uri })
+            val localUris = state.items.mapNotNull { item -> LocalMediaDeletion.itemUri(context, item.media.uri, item.media.mimeType) }.distinct()
+            val unsupported = state.items.size - localUris.size
+            unsupportedDeletionCount = unsupported
+            if (localUris.isEmpty()) {
+                if (unsupported > 0) deletionIssue = "发布已经成功。系统相册返回的文件只允许读取，请在相册中手动删除本地原件。"
+                else onPublished(state.publishedDate ?: state.eventDate)
+            } else if (Build.VERSION.SDK_INT >= 30) {
+                runCatching {
+                    requestedDeleteUris = localUris
+                    val request = MediaStore.createDeleteRequest(context.contentResolver, localUris)
+                    deleteLauncher.launch(IntentSenderRequest.Builder(request.intentSender).build())
+                }.onFailure { error ->
+                    Log.w("PublishScreen", "Unable to request local media deletion", error)
+                    deletionIssue = "发布已经成功，但无法请求删除本地文件。可在“我的”中重试清理。"
+                }
+            } else {
+                deletionIssue = "发布已经成功。此 Android 版本需要在相册中手动删除本地文件。"
+            }
+        }
+    }
+    deletionIssue?.let { message ->
+        AlertDialog(onDismissRequest = {}, title = { Text("本地文件未删除") }, text = { Text(message) },
+            confirmButton = { TextButton(onClick = { onPublished(state.publishedDate ?: state.eventDate) }) { Text("知道了") } })
+    }
+    if (choosingMedia && permissionChecked) {
+        LocalMediaPicker(
+            birthday = birthday,
+            onDone = { uris -> viewModel.addUris(uris); choosingMedia = false },
+            onSkip = { choosingMedia = false },
+            onSystemPicker = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
+        )
+        return
+    }
     Scaffold(
         topBar = { TopAppBar(title = { Text("留下这一刻") }, navigationIcon = { TextButton(onClick = onBack, enabled = !state.publishing) { Text("返回") } }) },
         bottomBar = {
@@ -52,15 +137,6 @@ fun PublishScreen(onPublished: (String) -> Unit, onBack: () -> Unit = {}, viewMo
                 Text("不同日期自动分开归档，同一天追加到已有记录。", Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow), shape = RoundedCornerShape(20.dp)) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(state.content, viewModel::content, enabled = !locked, label = { Text("想记住的小事") }, placeholder = { Text("今天有怎样的可爱瞬间？") }, minLines = 3, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp))
-                        OutlinedTextField(state.location, viewModel::location, enabled = !locked, label = { Text("地点 · 可选") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp))
-                        if (groups.size > 1) Text("文字和地点用于每个日期，可发布后分别编辑。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-            item {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) { Text("按拍摄日期归档", fontWeight = FontWeight.SemiBold); Text("关闭后全部使用手选日期", style = MaterialTheme.typography.bodyMedium) }
                     Switch(state.automaticDates, viewModel::automaticDates, enabled = !locked)
@@ -73,8 +149,16 @@ fun PublishScreen(onPublished: (String) -> Unit, onBack: () -> Unit = {}, viewMo
                 }
             }
             item {
-                OutlinedButton(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }, enabled = !locked && !state.readingMedia,
+                OutlinedButton(onClick = { choosingMedia = true }, enabled = !locked && !state.readingMedia,
                     modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(16.dp)) { Text(if (state.readingMedia) "正在读取拍摄时间…" else "＋  选择照片或视频") }
+            }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("记事与地点 · 可选", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(state.content, viewModel::content, enabled = !locked, placeholder = { Text("想记住的小事") }, minLines = 1, maxLines = 3, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp))
+                    OutlinedTextField(state.location, viewModel::location, enabled = !locked, placeholder = { Text("地点") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp))
+                    if (groups.size > 1) Text("文字和地点用于每个日期，可发布后分别编辑。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             groups.forEach { (date, media) ->
                 item(key = date) {

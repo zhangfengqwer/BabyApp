@@ -45,4 +45,15 @@ describe('ImmichService media routing', () => {
       url: 'http://immich:2283/api/assets/video-id/video/playback',
     }));
   });
+
+  it('moves the selected asset IDs to the Immich trash', async () => {
+    const axiosRef = { request: jest.fn().mockResolvedValue({ status: 204 }) };
+    const service = new ImmichService({ axiosRef } as never, config as never);
+    await service.deleteAssets(['asset-id']);
+    expect(axiosRef.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'DELETE', url: 'http://immich:2283/api/assets',
+      data: { ids: ['asset-id'], force: false },
+      headers: expect.objectContaining({ 'x-api-key': 'test-key' }),
+    }));
+  });
 });

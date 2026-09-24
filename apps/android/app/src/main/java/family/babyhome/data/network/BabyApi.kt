@@ -22,6 +22,7 @@ interface BabyApi {
     @PATCH suspend fun editMoment(@Url url: String, @Body body: MomentEditRequest): MomentResponse
     @DELETE suspend fun deleteMoment(@Url url: String): EmptyResponse
     @DELETE suspend fun deleteMomentAsset(@Url url: String): EmptyResponse
+    @POST suspend fun deleteMomentAssets(@Url url: String, @Body body: RemoveMomentAssetsRequest): EmptyResponse
     @POST
     suspend fun login(@Url url: String, @Body request: LoginRequest): LoginResponse
 
@@ -103,3 +104,4 @@ data class CommentsResponse(val success: Boolean, val data: CommentPage)
 data class EmptyResponse(val success: Boolean)
 data class MomentEditRequest(val content: String? = null, val location: String? = null,
     val eventDate: String? = null, val coverAssetId: String? = null)
+data class RemoveMomentAssetsRequest(val assetIds: List<String>)

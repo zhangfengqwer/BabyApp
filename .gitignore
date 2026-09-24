@@ -11,5 +11,5 @@
 android-build-exit.txt
 scripts/.state/
 releases/*.apk
-releases/version.json
+releases/*.json
 .DS_Store

@@ -1,7 +1,9 @@
 package family.babyhome.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,7 +16,6 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -26,6 +27,8 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import family.babyhome.ui.timeline.TimelineViewModel
 import family.babyhome.ui.timeline.MomentDetailScreen
@@ -35,7 +38,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import family.babyhome.R
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -45,6 +52,7 @@ import androidx.navigation.compose.rememberNavController
 import family.babyhome.ui.home.HomeScreen
 import family.babyhome.ui.media.MediaGalleryScreen
 import family.babyhome.ui.publish.PublishScreen
+import family.babyhome.ui.publish.PublishedMediaCleanupEntry
 import family.babyhome.ui.settings.ServerSettingsScreen
 import family.babyhome.ui.timeline.TimelineScreen
 import family.babyhome.ui.baby.BabyProfileScreen
@@ -110,31 +118,41 @@ fun BabyHomeApp(viewModel: AppViewModel = hiltViewModel()) {
                         navController.navigate("home") { popUpTo("connect") { inclusive = true } }
                     }
                 }
-                Column(
-                    Modifier.fillMaxSize().padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Text("之之成长手册", style = MaterialTheme.typography.headlineMedium)
-                    if (appState.selectingIdentity) {
-                        Text("你是宝宝的哪位家人？", Modifier.padding(vertical = 16.dp), style = MaterialTheme.typography.titleLarge)
-                        androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f, fill = false)) {
-                            items(appState.members.size) { index ->
-                                val member = appState.members[index]
-                                TextButton(onClick = { viewModel.selectIdentity(member.username) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                                    Text("${member.relationship} · ${member.username}${if(member.role == "ADMIN") "（管理员）" else ""}")
+                if (appState.connecting || appState.connected) {
+                    Box(Modifier.fillMaxSize().background(Color.White)) {
+                        Row(
+                            Modifier.align(Alignment.BottomCenter).padding(bottom = 72.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Image(painterResource(R.drawable.splash_mark), contentDescription = null, modifier = Modifier.size(52.dp))
+                            Text("时光小屋", fontSize = 30.sp, fontWeight = FontWeight.Medium, letterSpacing = 2.sp, color = Color(0xFF343434))
+                        }
+                    }
+                } else {
+                    Column(
+                        Modifier.fillMaxSize().padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text("之之成长手册", style = MaterialTheme.typography.headlineMedium)
+                        if (appState.selectingIdentity) {
+                            Text("你是宝宝的哪位家人？", Modifier.padding(vertical = 16.dp), style = MaterialTheme.typography.titleLarge)
+                            androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f, fill = false)) {
+                                items(appState.members.size) { index ->
+                                    val member = appState.members[index]
+                                    TextButton(onClick = { viewModel.selectIdentity(member.username) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                                        Text("${member.relationship} · ${member.username}${if(member.role == "ADMIN") "（管理员）" else ""}")
+                                    }
                                 }
                             }
-                        }
-                        Text("没有找到自己？请家庭管理员先添加成员。")
-                    } else if (appState.connecting || appState.connected) {
-                        CircularProgressIndicator(Modifier.padding(24.dp))
-                        Text(if (appState.connected) "正在打开时光轴…" else "正在连接家庭相册…")
-                    } else {
-                        Text(appState.error ?: "暂时无法进入相册", Modifier.padding(vertical = 20.dp))
-                        Button(onClick = viewModel::connect) { Text("重新连接") }
-                        Button(onClick = { navController.navigate("server_settings") }, Modifier.padding(top = 8.dp)) {
-                            Text("服务器设置")
+                            Text("没有找到自己？请家庭管理员先添加成员。")
+                        } else {
+                            Text(appState.error ?: "暂时无法进入相册", Modifier.padding(vertical = 20.dp))
+                            Button(onClick = viewModel::connect) { Text("重新连接") }
+                            Button(onClick = { navController.navigate("server_settings") }, Modifier.padding(top = 8.dp)) {
+                                Text("服务器设置")
+                            }
                         }
                     }
                 }
@@ -150,7 +168,7 @@ fun BabyHomeApp(viewModel: AppViewModel = hiltViewModel()) {
                 TimelineScreen(onMoment = { id -> navController.navigate("moment/$id") }, viewModel = timelineViewModel, onEditBaby = { navController.navigate("baby_profile") })
             }
             composable("publish") {
-                PublishScreen(onBack = { navController.popBackStack() }, onPublished = { eventDate ->
+                PublishScreen(onBack = { navController.popBackStack() }, birthday = timelineState.baby?.birthday, onPublished = { eventDate ->
                     // Reload first, then focus the date of the newly published media.
                     timelineViewModel.loadInitial(scrollTargetDate = eventDate)
                     navController.popBackStack()
@@ -168,6 +186,7 @@ fun BabyHomeApp(viewModel: AppViewModel = hiltViewModel()) {
                     Text("每一刻，都值得珍藏", Modifier.padding(vertical = 16.dp))
                     ListItem(headlineContent = { Text("发布照片与视频") }, trailingContent = { Text("›") },
                         modifier = Modifier.clickable { navController.navigate("publish") })
+                    PublishedMediaCleanupEntry()
                     if (timelineState.baby?.canEdit == true) ListItem(headlineContent = { Text("编辑宝宝名片") }, trailingContent = { Text("›") }, modifier = Modifier.clickable { navController.navigate("baby_profile") })
                     ListItem(headlineContent = { Text("服务器设置") }, trailingContent = { Text("›") },
                         modifier = Modifier.clickable { navController.navigate("server_settings") })

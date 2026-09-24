@@ -2,11 +2,11 @@
 <resources>
     <style name="Theme.BabyHome" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <!-- Do not let Android flash a cached copy of the previous screen on launch. -->
-        <item name="android:windowDisablePreview">true</item>
         <item name="android:windowBackground">#FFFFFFFF</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowSplashScreenBackground">#FFFFFFFF</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
     </style>
 </resources>

@@ -64,6 +64,23 @@ export class ImmichService {
     }
   }
 
+  async deleteAssets(ids: string[]) {
+    if (!ids.length) return;
+    const apiKey = this.config.get<string>('IMMICH_API_KEY');
+    if (!apiKey) throw new BadGatewayException('Immich API Key 未配置，原件未删除');
+    try {
+      await this.http.axiosRef.request({
+      method: 'DELETE',
+      url: `${this.baseUrl()}/api/assets`,
+      data: { ids, force: false },
+      headers: { 'x-api-key': apiKey, 'content-type': 'application/json' },
+      timeout: 60_000,
+      });
+    } catch {
+      throw new BadGatewayException('服务器原件移入回收站失败，成长记录未移除；请检查 Immich 删除权限后重试');
+    }
+  }
+
   private baseUrl() {
     const value = this.config.get<string>('IMMICH_BASE_URL')?.trim().replace(/\/$/, '');
     if (!value) throw new Error('IMMICH_BASE_URL is not configured');

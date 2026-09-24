@@ -32,6 +32,47 @@ function switchWebIdentity() {
   state.moments = [];
   start();
 }
+function openAgeIndex() {
+  const months = new Map();
+  for (const moment of state.moments) {
+    const date = localDateKey(moment.eventDate);
+    const month = date.slice(0, 7);
+    if (!months.has(month)) months.set(month, { date, age: ageAt(state.baby.birthday, moment.eventDate) });
+  }
+  overlay.innerHTML = `<section class="overlay-screen feature-screen"><div class="sheet-head"><h2>按宝宝年龄查找</h2><button class="close">×</button></div><p class="muted">当前已加载的成长记录</p>${[...months].map(([month, info]) => `<button class="settings-row" data-age-date="${info.date}">${esc(info.age)} · ${esc(month.replace("-", "年"))}月 <span>›</span></button>`).join("")}</section>`;
+  overlay.querySelector(".close").onclick = () => overlay.innerHTML = "";
+  overlay.querySelectorAll("[data-age-date]").forEach((button) => button.onclick = () => {
+    const date = button.dataset.ageDate;
+    overlay.innerHTML = "";
+    state.view = "timeline";
+    render();
+    requestAnimationFrame(() => document.querySelector(`[data-day="${date}"]`)?.scrollIntoView({ block: "start" }));
+  });
+}
+function openWebServerSettings() {
+  overlay.innerHTML = `<section class="overlay-screen feature-screen"><div class="sheet-head"><h2>家庭服务器</h2><button class="close">×</button></div><p class="muted">网页版连接到当前网页所在的家庭服务器；Immich 由家庭服务器代理。</p><label class="field">服务器地址<input id="serverOrigin" type="url" value="${esc(location.origin)}" autocomplete="url"></label><div class="server-actions"><button id="testServer">测试连接</button><button id="openServer" class="primary">打开此地址</button></div><p class="server-result" role="status"></p><p class="muted">在家请连接家庭 Wi-Fi；外出请打开 Tailscale，并使用对应的网页地址。</p></section>`;
+  overlay.querySelector(".close").onclick = () => overlay.innerHTML = "";
+  const result = overlay.querySelector(".server-result");
+  const target = () => {
+    const url = new URL(overlay.querySelector("#serverOrigin").value.trim());
+    if (!["http:", "https:"].includes(url.protocol)) throw new Error("请填写 HTTP 或 HTTPS 地址");
+    return url.origin;
+  };
+  overlay.querySelector("#testServer").onclick = async () => {
+    try {
+      const origin = target();
+      const started = performance.now();
+      const response = await fetch(`${origin}/health`);
+      if (!response.ok) throw new Error("连接失败");
+      const health = (await response.json()).data;
+      result.textContent = `连接成功 · ${Math.round(performance.now() - started)}ms · 数据库 ${health.services.database === "up" ? "正常" : "异常"} · Immich ${health.services.immich === "up" ? "正常" : "异常"}`;
+    } catch (error) { result.textContent = `${error.message}。跨地址测试也可能被浏览器的跨域限制拦截。`; }
+  };
+  overlay.querySelector("#openServer").onclick = () => {
+    try { location.assign(`${target()}/web/`); }
+    catch (error) { result.textContent = error.message; }
+  };
+}
 async function openFamilyMembers() {
   try {
     state.members = await api(`/babies/${state.baby.id}/family`);
@@ -91,9 +132,47 @@ function openMemberForm(member) {
   };
 }
 function detailAssetTile(asset, index, canEdit) {
-  return `<div class="detail-tile" data-gallery="${index}" data-link-id="${asset.id}" tabindex="0" role="button" aria-label="查看${asset.assetType === "VIDEO" ? "视频" : "照片"}${canEdit ? "，长按显示删除按钮" : ""}">${asset.assetType === "VIDEO" ? `<div class="video-thumb has-poster"><img data-asset="${asset.immichAssetId}" data-size="thumbnail" alt="视频封面处理中"><span>▶ 视频</span></div>` : `<img data-asset="${asset.immichAssetId}" data-size="preview" alt="照片处理中">`}${canEdit ? '<button class="asset-remove" aria-label="从时光轴移除这个媒体"></button>' : ""}</div>`;
+  return `<div class="detail-tile" data-gallery="${index}" data-link-id="${asset.id}" tabindex="0" role="button" aria-label="查看${asset.assetType === "VIDEO" ? "视频" : "照片"}${canEdit ? "，长按进入选择模式" : ""}">${asset.assetType === "VIDEO" ? `<div class="video-thumb has-poster"><img data-asset="${asset.immichAssetId}" data-size="thumbnail" alt="视频封面处理中"><span>▶ 视频</span></div>` : `<img data-asset="${asset.immichAssetId}" data-size="preview" alt="照片处理中">`}${canEdit ? '<span class="asset-select-mark" aria-hidden="true">✓</span>' : ""}</div>`;
 }
 function bindAssetLongPress(moment) {
+  if (!moment.canEdit) return;
+  const screen = overlay.querySelector(".detail");
+  const selected = new Set();
+  const toolbar = screen.querySelector(".detail-select-head");
+  const footer = screen.querySelector(".detail-select-footer");
+  const update = () => {
+    const selecting = screen.classList.contains("selection-mode");
+    toolbar.hidden = !selecting;
+    footer.hidden = !selecting;
+    screen.querySelectorAll(".detail-tile").forEach(tile => tile.classList.toggle("is-selected", selected.has(tile.dataset.linkId)));
+    screen.querySelector(".selected-count").textContent = `选中了${selected.size}项`;
+    screen.querySelector(".detail-select-footer .count").textContent = `已选 ${selected.size} 项`;
+    screen.querySelector(".delete-selected").disabled = selected.size === 0;
+    screen.querySelector(".select-all").textContent = selected.size === moment.assets.length ? "取消全选" : "全选";
+  };
+  const begin = (id) => {
+    if (!moment.canEdit) return;
+    selected.add(id);
+    screen.classList.add("selection-mode");
+    update();
+  };
+  toolbar.querySelector(".close-selection").onclick = () => { selected.clear(); screen.classList.remove("selection-mode"); update(); };
+  toolbar.querySelector(".select-all").onclick = () => {
+    if (selected.size === moment.assets.length) selected.clear();
+    else moment.assets.forEach(asset => selected.add(asset.id));
+    update();
+  };
+  footer.querySelector(".delete-selected").onclick = async () => {
+    if (!selected.size || !confirm(`将从记录移除选中的 ${selected.size} 个照片或视频，并把服务器原件移入 Immich 回收站。若原件被其他记录或头像使用，删除会被阻止。确定吗？`)) return;
+    const button = footer.querySelector(".delete-selected");
+    button.disabled = true;
+    try {
+      await api(`/moments/${moment.id}/assets/remove`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assetIds: [...selected] }) });
+      await loadMoments(true);
+      await openDetail(moment.id);
+      toast("已从记录移除，服务器原件已进回收站");
+    } catch (error) { button.disabled = false; toast(error.message); }
+  };
   overlay.querySelectorAll(".detail-tile").forEach((tile) => {
     const open = tile.onclick;
     let timer,
@@ -103,14 +182,10 @@ function bindAssetLongPress(moment) {
     const cancel = () => clearTimeout(timer);
     const reveal = () => {
       held = true;
-      overlay
-        .querySelectorAll(".detail-tile.is-editing")
-        .forEach((t) => t.classList.remove("is-editing"));
-      tile.classList.add("is-editing");
+      begin(tile.dataset.linkId);
     };
     if (moment.canEdit) {
       tile.onpointerdown = (e) => {
-        if (e.target.closest(".asset-remove")) return;
         x = e.clientX;
         y = e.clientY;
         held = false;
@@ -126,39 +201,23 @@ function bindAssetLongPress(moment) {
         e.preventDefault();
         reveal();
       };
-      tile.querySelector(".asset-remove").onclick = async (e) => {
-        e.stopPropagation();
-        cancel();
-        if (!confirm("只从这一天的时光轴移除，Immich 原文件保留。确定吗？"))
-          return;
-        const button = e.currentTarget;
-        button.disabled = true;
-        try {
-          await api(`/moments/${moment.id}/assets/${tile.dataset.linkId}`, {
-            method: "DELETE",
-          });
-          await loadMoments(true);
-          await openDetail(moment.id);
-        } catch (error) {
-          button.disabled = false;
-          toast(error.message);
-        }
-      };
     }
     tile.onclick = (e) => {
-      if (e.target.closest(".asset-remove")) return;
       if (held) {
         e.preventDefault();
         held = false;
         return;
       }
-      tile.classList.remove("is-editing");
-      open(e);
+      if (screen.classList.contains("selection-mode")) {
+        if (selected.has(tile.dataset.linkId)) selected.delete(tile.dataset.linkId);
+        else selected.add(tile.dataset.linkId);
+        update();
+      } else open(e);
     };
     tile.onkeydown = (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        open(e);
+        tile.click();
       } else if (
         moment.canEdit &&
         (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))
@@ -329,15 +388,119 @@ function planWebGroups(items, fallback, automatic) {
   if (!items.length) groups.set(fallback, []);
   return groups;
 }
-function openGroupedPublish() {
+function mediaFingerprint(file) {
+  return `${file.name}\u0000${file.size}\u0000${file.lastModified}`;
+}
+function openMomentEdit(moment) {
+  overlay.innerHTML = `<section class="overlay-screen feature-screen"><form><div class="sheet-head"><h2>编辑记录</h2><button type="button" class="close">×</button></div><label class="field">文字<textarea name="content" maxlength="5000" rows="3">${esc(moment.content || "")}</textarea></label><label class="field">地点<input name="location" maxlength="255" value="${esc(moment.location || "")}"></label><p class="feature-error" role="alert"></p><button class="primary">保存</button></form></section>`;
+  const form = overlay.querySelector("form");
+  form.querySelector(".close").onclick = () => openDetail(moment.id);
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const button = form.querySelector(".primary");
+    button.disabled = true;
+    try {
+      await api(`/moments/${moment.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: form.content.value, location: form.location.value }) });
+      await loadMoments(true);
+      await openDetail(moment.id);
+    } catch (error) { form.querySelector(".feature-error").textContent = error.message; button.disabled = false; }
+  };
+}
+function openCoverPicker(moment) {
+  overlay.innerHTML = `<section class="overlay-screen feature-screen"><div class="sheet-head"><h2>选择封面</h2><button class="close">×</button></div><div class="cover-options">${moment.assets.map((asset, index) => `<button data-cover="${esc(asset.immichAssetId)}"><img data-asset="${esc(asset.immichAssetId)}" data-size="thumbnail" alt="第 ${index + 1} 个媒体"><span>第 ${index + 1} 个${asset.assetType === "VIDEO" ? "视频" : "照片"}</span></button>`).join("")}</div><p class="feature-error" role="alert"></p></section>`;
+  hydrateImages(overlay);
+  overlay.querySelector(".close").onclick = () => openDetail(moment.id);
+  overlay.querySelectorAll("[data-cover]").forEach((button) => button.onclick = async () => {
+    button.disabled = true;
+    try {
+      await api(`/moments/${moment.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ coverAssetId: button.dataset.cover }) });
+      await loadMoments(true);
+      await openDetail(moment.id);
+    } catch (error) { overlay.querySelector(".feature-error").textContent = error.message; button.disabled = false; }
+  });
+}
+function openGroupedPublish(openPicker = true) {
   let items = [],
     busy = false;
   const completed = new Set(),
     urls = [];
-  overlay.innerHTML = `<section class="overlay-screen feature-screen"><form><div class="sheet-head"><h2>留下这一刻</h2><button type="button" class="close">×</button></div><p class="muted">不同日期自动分开归档，同一天追加到已有记录。</p><div class="form-card"><label class="field">想记住的小事<textarea name="content" maxlength="5000" rows="3" placeholder="今天有怎样的可爱瞬间？"></textarea></label><label class="field">地点 · 可选<input name="location" maxlength="255"></label></div><label class="date-toggle">按拍摄日期归档<input name="automatic" type="checkbox" checked></label><label class="field">手选日期 · 无拍摄时间时使用<input name="date" type="date" value="${localDateKey(new Date())}" max="${localDateKey(new Date())}" required></label><label class="media-pick">＋ 选择照片或视频<input name="media" type="file" accept="image/*,video/mp4,video/quicktime" multiple></label><p class="muted">文字与地点用于每个日期，可发布后分别编辑。</p><div class="publish-groups"></div><p class="feature-error" role="alert"></p><div class="publish-actions"><p class="group-summary"></p><button class="primary">发布到时光轴</button></div></form></section>`;
+  overlay.innerHTML = `<section class="overlay-screen feature-screen"><form><div class="sheet-head"><h2>留下这一刻</h2><button type="button" class="close">×</button></div><p class="muted">不同日期自动分开归档，同一天追加到已有记录。</p><label class="date-toggle">按拍摄日期归档<input name="automatic" type="checkbox" checked></label><label class="field">无拍摄时间时使用的日期<input name="date" type="date" value="${localDateKey(new Date())}" max="${localDateKey(new Date())}" required></label><label class="media-pick">＋ 选择照片或视频<input name="media" type="file" accept="image/*,video/*" multiple></label><p class="muted">使用 iOS 系统相册选择照片；多选手势由系统相册提供。</p><div class="form-card publish-notes"><label class="field">记事 · 可选<textarea name="content" maxlength="5000" rows="2" placeholder="想记住的小事"></textarea></label><label class="field">地点 · 可选<input name="location" maxlength="255" placeholder="地点"></label></div><p class="muted">文字与地点用于每个日期，可发布后分别编辑。iOS 网页无法删除照片图库中的原件，发布后请在“照片”中手动删除。</p><div class="publish-groups"></div><p class="feature-error" role="alert"></p><div class="publish-actions"><p class="group-summary"></p><button class="primary">发布到时光轴</button></div></form></section>`;
   const form = overlay.querySelector("form"),
     button = form.querySelector(".primary"),
     error = form.querySelector(".feature-error");
+  const openSelectionReview = () => {
+    overlay.querySelector(".web-selection-review")?.remove();
+    const review = document.createElement("section");
+    review.className = "web-selection-review";
+    overlay.appendChild(review);
+    const checked = new Set(items.map(item => item.index));
+    const published = new Set(JSON.parse(localStorage.getItem("zhizhiPublishedFiles") || "[]"));
+    let unuploadedOnly = false;
+    const redraw = () => {
+      const shown = items.filter(item => !unuploadedOnly || !published.has(mediaFingerprint(item.file)));
+      const groups = shown.length ? planWebGroups(shown, form.date.value, true) : new Map();
+      const picked = items.filter(item => checked.has(item.index));
+      review.innerHTML = `<div class="web-select-head"><button class="open-albums">☰ 相册</button><div class="web-select-tabs"><button class="${unuploadedOnly ? "" : "active"}" data-filter="all">全部</button><button class="${unuploadedOnly ? "active" : ""}" data-filter="new">未上传</button></div><button class="close-review">关闭</button></div><div class="web-select-scroll">${unuploadedOnly ? '<p class="muted web-select-hint">未上传仅按本机发布记录筛选</p>' : ""}${[...groups].sort(([a], [b]) => b.localeCompare(a)).map(([date, entries]) => `<section class="web-select-day"><div class="web-select-day-head"><b>${date.replace(/(\d{4})-(\d{2})-(\d{2})/, "$1年$2月$3日")} · ${esc(ageAt(state.baby.birthday, `${date}T00:00:00`))}</b><button data-select-day="${date}">${entries.every(item => checked.has(item.index)) ? "取消全选" : "全选"}</button></div><div class="web-select-grid">${entries.map(item => `<div class="web-select-tile ${checked.has(item.index) ? "checked" : ""}" data-review-index="${item.index}">${item.file.type.startsWith("video/") ? `<video muted playsinline preload="metadata" src="${item.url}#t=0.1"></video><span class="video-badge">▶ 视频</span>` : `<img src="${item.url}" alt="待选照片">`}<span class="check-mark">✓</span></div>`).join("")}</div></section>`).join("") || '<p class="muted empty-review">没有本机记录为未上传的媒体</p>'}</div><div class="web-select-bottom"><span>${picked.length}（照片${picked.filter(item => !item.file.type.startsWith("video/")).length} + 视频${picked.filter(item => item.file.type.startsWith("video/")).length}）</span><button class="next-review" ${picked.length ? "" : "disabled"}>下一步</button></div>`;
+      review.querySelector(".close-review").onclick = () => review.remove();
+      review.querySelector(".open-albums").onclick = () => form.media.click();
+      review.querySelector("[data-filter=all]").onclick = () => { unuploadedOnly = false; redraw(); };
+      review.querySelector("[data-filter=new]").onclick = () => { unuploadedOnly = true; redraw(); };
+      review.querySelectorAll("[data-select-day]").forEach(b => b.onclick = () => {
+        const entries = groups.get(b.dataset.selectDay) || [];
+        if (entries.every(item => checked.has(item.index))) entries.forEach(item => checked.delete(item.index));
+        else entries.forEach(item => checked.add(item.index));
+        redraw();
+      });
+      review.querySelector(".next-review").onclick = () => {
+        items = items.filter(item => checked.has(item.index));
+        review.remove();
+        draw();
+      };
+      let timer, start = -1, selecting = true, held = false, suppressClick = false, downX = 0, downY = 0;
+      review.querySelectorAll("[data-review-index]").forEach(tile => {
+        tile.onclick = () => {
+          if (suppressClick) return;
+          const index = Number(tile.dataset.reviewIndex);
+          if (checked.has(index)) checked.delete(index); else checked.add(index);
+          redraw();
+        };
+        tile.onpointerdown = event => {
+          start = Number(tile.dataset.reviewIndex);
+          downX = event.clientX;
+          downY = event.clientY;
+          held = false;
+          timer = setTimeout(() => {
+            held = suppressClick = true;
+            selecting = !checked.has(start);
+            if (selecting) checked.add(start); else checked.delete(start);
+            tile.classList.toggle("checked", selecting);
+          }, 450);
+        };
+        tile.onpointermove = event => {
+          if (!held) {
+            if (Math.abs(event.clientX - downX) > 10 || Math.abs(event.clientY - downY) > 10) clearTimeout(timer);
+            return;
+          }
+          const target = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-review-index]");
+          if (!target) return;
+          const end = Number(target.dataset.reviewIndex);
+          const ordered = shown.map(item => item.index);
+          const first = ordered.indexOf(start), last = ordered.indexOf(end);
+          if (first < 0 || last < 0) return;
+          for (const index of ordered.slice(Math.min(first, last), Math.max(first, last) + 1)) {
+            if (selecting) checked.add(index); else checked.delete(index);
+          }
+          review.querySelectorAll("[data-review-index]").forEach(el => el.classList.toggle("checked", checked.has(Number(el.dataset.reviewIndex))));
+        };
+        tile.onpointerup = tile.onpointercancel = () => {
+          clearTimeout(timer);
+          if (held) { held = false; setTimeout(() => { suppressClick = false; redraw(); }, 0); }
+        };
+        tile.oncontextmenu = event => event.preventDefault();
+      });
+    };
+    redraw();
+  };
   const draw = () => {
     const groups = planWebGroups(
       items,
@@ -387,27 +550,27 @@ function openGroupedPublish() {
     lock(true);
     error.textContent = "正在读取拍摄时间…";
     try {
-      urls.forEach(URL.revokeObjectURL);
-      urls.length = 0;
-      items = [];
       for (const file of form.media.files) {
+        if (items.some((item) => item.file.name === file.name && item.file.size === file.size && item.file.lastModified === file.lastModified)) continue;
         const url = URL.createObjectURL(file);
         urls.push(url);
         items.push({
           file,
           url,
-          index: items.length,
+          index: urls.length - 1,
           capturedAt: validCaptureDate(await mediaCapturedAt(file)),
           asset: null,
         });
       }
       error.textContent = "";
+      form.media.value = "";
     } catch (e) {
       error.textContent = "无法读取媒体，请重新选择";
     } finally {
       busy = false;
       lock(false);
       draw();
+      if (items.length && !error.textContent) openSelectionReview();
     }
   };
   form.onsubmit = async (e) => {
@@ -465,6 +628,9 @@ function openGroupedPublish() {
         draw();
       }
       const target = [...groups.keys()].sort().at(-1);
+      const fingerprints = new Set(JSON.parse(localStorage.getItem("zhizhiPublishedFiles") || "[]"));
+      items.forEach(item => fingerprints.add(mediaFingerprint(item.file)));
+      localStorage.setItem("zhizhiPublishedFiles", JSON.stringify([...fingerprints].slice(-2000)));
       await loadMoments(true);
       while (
         state.nextCursor &&
@@ -481,6 +647,7 @@ function openGroupedPublish() {
           ?.scrollIntoView({ block: "start" }),
       );
       toast(`已发布 ${groups.size} 个日期`);
+      if (items.length) alert("发布成功。iOS 网页无法删除照片图库中的原件，请在“照片”中手动删除。");
     } catch (e) {
       error.textContent = `${e.message}，已上传媒体和已成功日期会保留，点击重试继续。`;
     } finally {
@@ -492,4 +659,5 @@ function openGroupedPublish() {
     }
   };
   draw();
+  if (openPicker) form.media.click();
 }

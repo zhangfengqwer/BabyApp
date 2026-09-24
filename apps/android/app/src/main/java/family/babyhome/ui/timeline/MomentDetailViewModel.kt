@@ -25,12 +25,12 @@ class MomentDetailViewModel @Inject constructor(
     val state = mutable.asStateFlow()
     private suspend fun url() = config.activeConfig.first().babyServerUrl.trimEnd('/') + "/moments/" + id
     init { reload() }
-    private fun action(block: suspend () -> Unit) {
+    private fun action(failureMessage: String = "操作失败，请检查网络或重新登录后重试", block: suspend () -> Unit) {
         if(mutable.value.busy) return
         viewModelScope.launch {
             mutable.update { it.copy(busy=true,error=null) }
             try { block() } catch(e: CancellationException) { throw e }
-            catch(e: Exception) { mutable.update { it.copy(error="操作失败，请检查网络或重新登录后重试") } }
+            catch(e: Exception) { mutable.update { it.copy(error=failureMessage) } }
             finally { mutable.update { it.copy(busy=false) } }
         }
     }
@@ -50,8 +50,14 @@ class MomentDetailViewModel @Inject constructor(
     fun comment(text:String) = action { api.comment(url()+"/comments",CommentRequest(text)); fetch() }
     fun edit(content:String, location:String) = action { api.editMoment(url(),MomentEditRequest(content=content,location=location)); fetch() }
     fun cover(id:String) = action { api.editMoment(url(),MomentEditRequest(coverAssetId=id)); fetch() }
-    fun delete() = action { api.deleteMoment(url()); mutable.update { it.copy(deleted=true) } }
-    fun removeAsset(assetId: String) = action { api.deleteMomentAsset(url()+"/assets/"+assetId); fetch() }
+    fun delete() = action("删除未完成；原件可能仍被其他记录使用，或服务器删除失败。请检查后重试") { api.deleteMoment(url()); mutable.update { it.copy(deleted=true) } }
+    fun removeAsset(assetId: String) = action("删除未完成；原件可能仍被其他记录使用，或服务器删除失败。请检查后重试") { api.deleteMomentAsset(url()+"/assets/"+assetId); fetch() }
+    fun removeAssets(assetIds: List<String>) = action("删除未完成；原件可能仍被其他记录使用，或服务器删除失败。请检查后重试") {
+        if (assetIds.isNotEmpty()) {
+            api.deleteMomentAssets(url()+"/assets/remove", RemoveMomentAssetsRequest(assetIds.distinct()))
+            fetch()
+        }
+    }
     fun moreComments() = action {
         val cursor=mutable.value.cursor
         if(cursor != null) {

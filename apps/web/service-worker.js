@@ -1,4 +1,4 @@
-const CACHE = "zhizhi-pwa-v10";
+const CACHE = "zhizhi-pwa-v13";
 const SHELL = [
   "/web/",
   "/web/styles.css",
@@ -6,6 +6,7 @@ const SHELL = [
   "/web/features.js",
   "/web/icon.png",
   "/web/icon.svg",
+  "/web/splash-mark.svg",
   "/web/manifest.webmanifest",
 ];
 self.addEventListener("install", (event) =>

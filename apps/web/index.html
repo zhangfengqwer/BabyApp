@@ -14,18 +14,16 @@
     <link rel="manifest" href="/web/manifest.webmanifest" />
     <link rel="icon" href="/web/icon.svg" />
     <link rel="apple-touch-icon" href="/web/icon.png" />
-    <link rel="stylesheet" href="/web/styles.css?v=0.4.33" />
+    <link rel="stylesheet" href="/web/styles.css?v=0.4.36" />
   </head>
   <body>
     <div id="app">
       <main id="main">
         <section class="startup">
-          <span class="brand-mark">之</span>
-          <h1>之之成长手册</h1>
-          <p>正在打开家庭相册…</p>
+          <div class="startup-brand"><img src="/web/splash-mark.svg" alt="" /><span>时光小屋</span></div>
         </section>
       </main>
-      <nav class="bottom-nav" aria-label="主导航">
+      <nav class="bottom-nav" aria-label="主导航" hidden>
         <button class="nav-item active" data-view="timeline">
           <span>⌂</span><b>时光轴</b>
         </button>
@@ -36,13 +34,13 @@
           <span>●</span><b>我的</b>
         </button>
       </nav>
-      <button id="publishButton" class="publish-fab" aria-label="发布成长动态">
+      <button id="publishButton" class="publish-fab" aria-label="发布成长动态" hidden>
         ＋
       </button>
     </div>
     <div id="overlay"></div>
     <div id="toast" role="status"></div>
-    <script src="/web/app.js?v=0.4.33" defer></script>
-    <script src="/web/features.js?v=0.4.33" defer></script>
+    <script src="/web/app.js?v=0.4.36" defer></script>
+    <script src="/web/features.js?v=0.4.36" defer></script>
   </body>
 </html>

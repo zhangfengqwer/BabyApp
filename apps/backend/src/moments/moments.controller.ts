@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, Patch, Delete, Param, Query, UseGuards, ParseUUIDPipe } from '@nestjs/common';
-import { IsString, MaxLength, MinLength, IsOptional, IsDateString, IsUUID } from 'class-validator';
+import { IsString, MaxLength, MinLength, IsOptional, IsDateString, IsUUID, IsArray, ArrayNotEmpty, ArrayMaxSize } from 'class-validator';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AuthenticatedUser } from '../auth/auth.types';
@@ -13,6 +13,9 @@ export class MomentEditDto {
   @IsOptional() @IsDateString() eventDate?: string;
   @IsOptional() @IsUUID() coverAssetId?: string;
 }
+export class RemoveMomentAssetsDto {
+  @IsArray() @ArrayNotEmpty() @ArrayMaxSize(2000) @IsUUID('4', { each: true }) assetIds: string[];
+}
 @Controller('moments')
 @UseGuards(AuthGuard)
 export class MomentsController {
@@ -21,6 +24,7 @@ export class MomentsController {
   @Patch(':id') edit(@CurrentUser() u:AuthenticatedUser,@Param('id',ParseUUIDPipe) id:string,@Body() dto:MomentEditDto){return this.service.edit(u,id,dto);}
   @Delete(':id') remove(@CurrentUser() u:AuthenticatedUser,@Param('id',ParseUUIDPipe) id:string){return this.service.remove(u,id);}
   @Delete(':id/assets/:assetId') removeAsset(@CurrentUser() u:AuthenticatedUser,@Param('id',ParseUUIDPipe) id:string,@Param('assetId',ParseUUIDPipe) assetId:string){return this.service.removeAsset(u,id,assetId);}
+  @Post(':id/assets/remove') removeAssets(@CurrentUser() u:AuthenticatedUser,@Param('id',ParseUUIDPipe) id:string,@Body() dto:RemoveMomentAssetsDto){return this.service.removeAssets(u,id,dto.assetIds);}
   @Get(':id/comments') comments(@CurrentUser() u:AuthenticatedUser,@Param('id',ParseUUIDPipe) id:string,@Query('cursor') cursor?:string){return this.service.comments(u,id,cursor);}
   @Post(':id/comments') comment(@CurrentUser() u:AuthenticatedUser,@Param('id',ParseUUIDPipe) id:string,@Body() dto:CommentDto){return this.service.comment(u,id,dto.content);}
   @Post(':id/like') like(@CurrentUser() u:AuthenticatedUser,@Param('id',ParseUUIDPipe) id:string){return this.service.like(u,id,true);}

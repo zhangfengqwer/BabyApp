@@ -148,10 +148,10 @@ function hero() {
     avatar = b.avatarAssetId
       ? `<img class="baby-avatar" data-asset="${b.avatarAssetId}" data-size="thumbnail" alt="${esc(b.name)}的头像">`
       : '<div class="baby-avatar fallback">之</div>';
-  return `<header class="hero"><div class="app-title"><span class="mark">之</span><div><h1>之之成长手册</h1><p>把每一天，留给长大的你</p></div></div><section class="baby-card">${avatar}<div><div class="baby-name">${esc(b.name)}</div><div class="baby-age">${esc(ageAt(b.birthday, today))}</div></div><div class="baby-meta"><span>生日 ${localDay(b.birthday)}</span><span>来到家里第 ${Math.max(1, Math.floor((today - new Date(b.birthday)) / 86400000) + 1)} 天</span></div></section></header>`;
+  return `<header class="hero"><div class="app-title"><span class="mark">之</span><div><h1>之之成长手册</h1><p>把每一天，留给长大的你</p></div><button id="ageIndex" class="age-index-trigger">按年龄</button></div><section class="baby-card">${avatar}<div><div class="baby-name">${esc(b.name)}</div><div class="baby-age">${esc(ageAt(b.birthday, today))}</div></div><div class="baby-meta"><span>生日 ${localDay(b.birthday)}</span><span>来到家里第 ${Math.max(1, Math.floor((today - new Date(b.birthday)) / 86400000) + 1)} 天</span></div></section></header>`;
 }
 function tabs() {
-  return `<div class="view-tabs"><button data-subview="timeline" class="${state.view === "timeline" ? "active" : ""}">时光轴</button><button data-subview="calendar" class="${state.view === "calendar" ? "active" : ""}">日历</button></div>`;
+  return `<div class="view-tabs"><button data-subview="timeline" class="${state.view === "timeline" ? "active" : ""}">时光轴</button><button data-subview="calendar" class="${state.view === "calendar" ? "active" : ""}">日历</button><button id="refreshTimeline" aria-label="刷新记录">↻</button></div>`;
 }
 function mediaCell(asset, index, momentId) {
   if (asset.assetType === "VIDEO")
@@ -214,7 +214,7 @@ function calendar() {
 }
 function profile() {
   const identity = state.members.find((m) => m.id === state.user?.id);
-  return `<section class="profile"><h1>我的</h1><div class="profile-card"><b>${esc(identity?.relationship || state.user?.nickname || "家人")}</b><p class="muted">${state.user?.role === "ADMIN" ? "家庭管理员" : "一起记录成长的家人"}</p></div><div class="profile-card"><button id="familyMembers" class="settings-row">家庭成员 <span>›</span></button>${state.baby.canEdit ? '<button id="babyProfile" class="settings-row">编辑宝宝名片 <span>›</span></button>' : ""}<button id="switchIdentity" class="settings-row">切换我的身份 <span>›</span></button></div><div class="profile-card install-note"><p>在家连接家庭 Wi‑Fi；外出先连接 Tailscale。</p></div></section>`;
+  return `<section class="profile"><h1>我的</h1><div class="profile-card"><b>${esc(identity?.relationship || state.user?.nickname || "家人")}</b><p class="muted">${state.user?.role === "ADMIN" ? "家庭管理员" : "一起记录成长的家人"}</p></div><div class="profile-card"><button id="profilePublish" class="settings-row">发布照片与视频 <span>›</span></button><button id="familyMembers" class="settings-row">家庭成员 <span>›</span></button>${state.baby.canEdit ? '<button id="babyProfile" class="settings-row">编辑宝宝名片 <span>›</span></button>' : ""}<button id="switchIdentity" class="settings-row">切换我的身份 <span>›</span></button><button id="webServerSettings" class="settings-row">家庭服务器 <span>›</span></button><div class="settings-row">网页版版本 <small>0.4.36</small></div></div><div class="profile-card install-note"><p>在家连接家庭 Wi‑Fi；外出先连接 Tailscale。</p></div></section>`;
 }
 function render() {
   document.querySelector(".bottom-nav").hidden = false;
@@ -238,6 +238,16 @@ function render() {
       : hero() + tabs() + (state.view === "calendar" ? calendar() : timeline());
   hydrateImages();
   bindMain();
+  document.querySelector("#ageIndex")?.addEventListener("click", openAgeIndex);
+  document.querySelector("#refreshTimeline")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try { await loadMoments(true); render(); } catch (error) { button.disabled = false; toast(error.message); }
+  });
+  document
+    .querySelector("#profilePublish")
+    ?.addEventListener("click", () => openGroupedPublish());
+  document.querySelector("#webServerSettings")?.addEventListener("click", openWebServerSettings);
   document
     .querySelector("#familyMembers")
     ?.addEventListener("click", openFamilyMembers);
@@ -324,7 +334,12 @@ async function openDetail(id) {
   try {
     const m = await api(`/moments/${id}`);
     const comments = await api(`/moments/${id}/comments`);
-    overlay.innerHTML = `<section class="overlay-screen detail"><div class="detail-head"><div><h2>${esc(ageAt(m.baby.birthday, m.eventDate))}</h2><span class="muted">${localDay(m.eventDate)}</span></div><button class="close" data-close>×</button></div><div class="detail-media">${m.assets.map((a, i) => detailAssetTile(a, i, m.canEdit)).join("")}</div><div class="detail-text">${esc(m.content || "")}</div>${m.location ? `<p class="muted">⌖ ${esc(m.location)}</p>` : ""}<div class="actions"><button id="detailLike" class="${m.likedByMe ? "liked" : ""}">♡ ${m._count.likes}</button>${m.canEdit ? '<button id="deleteMoment" class="danger">删除</button>' : ""}</div><section class="comments"><h3>家人留言</h3><div>${comments.items.map((c) => `<div class="comment"><b>${esc(c.user?.nickname || "家人")}</b>${esc(c.content)}</div>`).join("") || '<p class="muted">还没有留言</p>'}</div><form class="comment-form"><input maxlength="2000" placeholder="写留言…"><button>发送</button></form></section></section>`;
+    overlay.innerHTML = `<section class="overlay-screen detail"><div class="detail-head"><div><h2>${esc(ageAt(m.baby.birthday, m.eventDate))}</h2><span class="muted">${localDay(m.eventDate)}</span></div><button class="close" data-close>×</button></div><div class="detail-media">${m.assets.map((a, i) => detailAssetTile(a, i, m.canEdit)).join("")}</div><div class="detail-text">${esc(m.content || "")}</div>${m.location ? `<p class="muted">⌖ ${esc(m.location)}</p>` : ""}<div class="actions"><button id="detailLike" class="${m.likedByMe ? "liked" : ""}">♡ ${m._count.likes}</button>${m.canEdit ? `<button id="editMoment">编辑</button>${m.assets.length ? '<button id="chooseCover">设置封面</button>' : ""}<button id="deleteMoment" class="danger">删除</button>` : ""}</div><section class="comments"><h3>家人留言</h3><div class="comment-list">${comments.items.map((c) => `<div class="comment"><b>${esc(c.user?.nickname || "家人")}</b>${esc(c.content)}</div>`).join("") || '<p class="muted">还没有留言</p>'}</div>${comments.nextCursor ? '<button id="moreComments" class="settings-row">更早留言</button>' : ""}<form class="comment-form"><input maxlength="2000" placeholder="写留言…"><button>发送</button></form></section></section>`;
+    if (m.canEdit) {
+      const screen = overlay.querySelector(".detail");
+      screen.insertAdjacentHTML("afterbegin", '<div class="detail-select-head" hidden><button class="select-all">全选</button><b class="selected-count">选中了0项</b><button class="close-selection">关闭</button></div>');
+      screen.insertAdjacentHTML("beforeend", '<div class="detail-select-footer" hidden><span class="count">已选 0 项</span><button class="delete-selected" disabled>删除所选</button></div>');
+    }
     hydrateImages(overlay);
     overlay.querySelector("[data-close]").onclick = () => {
       const savedScroll = window.scrollY;
@@ -351,16 +366,33 @@ async function openDetail(id) {
       await loadMoments(true);
     };
     bindAssetLongPress(m);
+    overlay.querySelector("#editMoment")?.addEventListener("click", () => openMomentEdit(m));
+    overlay.querySelector("#chooseCover")?.addEventListener("click", () => openCoverPicker(m));
+    let commentCursor = comments.nextCursor;
+    overlay.querySelector("#moreComments")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        const page = await api(`/moments/${m.id}/comments?cursor=${encodeURIComponent(commentCursor)}`);
+        overlay.querySelector(".comment-list .muted")?.remove();
+        overlay.querySelector(".comment-list").insertAdjacentHTML("beforeend", page.items.map((c) => `<div class="comment"><b>${esc(c.user?.nickname || "家人")}</b>${esc(c.content)}</div>`).join(""));
+        commentCursor = page.nextCursor;
+        if (!commentCursor) button.remove(); else button.disabled = false;
+      } catch (error) { button.disabled = false; toast(error.message); }
+    });
     const del = overlay.querySelector("#deleteMoment");
     if (del)
       del.onclick = async () => {
-        if (!confirm("只删除这条动态，Immich 原照片会保留。确定删除吗？"))
+        if (!confirm("将删除这条记录和留言，并把服务器原件移入 Immich 回收站。若原件仍被其他地方使用，删除会被阻止。确定吗？"))
           return;
-        await api(`/moments/${m.id}`, { method: "DELETE" });
-        overlay.innerHTML = "";
-        await loadMoments(true);
-        render();
-        toast("已删除");
+        del.disabled = true;
+        try {
+          await api(`/moments/${m.id}`, { method: "DELETE" });
+          overlay.innerHTML = "";
+          await loadMoments(true);
+          render();
+          toast("记录已删除，服务器原件已进回收站");
+        } catch (error) { del.disabled = false; toast(error.message); }
       };
     overlay.querySelector(".comment-form").onsubmit = async (e) => {
       e.preventDefault();
@@ -386,31 +418,73 @@ async function openGallery(
   },
 ) {
   let current = index;
+  let activeUrl = null;
+  let generation = 0;
+  const release = () => {
+    if (activeUrl) URL.revokeObjectURL(activeUrl);
+    activeUrl = null;
+  };
   const draw = async () => {
+    const drawId = ++generation;
+    release();
     const a = assets[current];
-    overlay.innerHTML = `<div class="gallery"><span class="gallery-count">${current + 1} / ${assets.length}</span>${a.assetType === "VIDEO" ? "<video controls autoplay playsinline></video>" : '<img alt="完整照片">'}</div>`;
+    overlay.innerHTML = `<div class="gallery"><button class="gallery-close" aria-label="返回记录">×</button><span class="gallery-count">${current + 1} / ${assets.length}</span><button class="gallery-prev" aria-label="上一个">‹</button>${a.assetType === "VIDEO" ? "<video controls autoplay playsinline></video>" : '<img alt="完整照片">'}<button class="gallery-next" aria-label="下一个">›</button></div>`;
+    const gallery = overlay.querySelector(".gallery");
+    const move = (direction) => { current = (current + direction + assets.length) % assets.length; draw(); };
+    gallery.querySelector(".gallery-close").onclick = () => { ++generation; release(); onClose(); };
+    gallery.querySelector(".gallery-prev").onclick = () => move(-1);
+    gallery.querySelector(".gallery-next").onclick = () => move(1);
     const response = await raw(
       `/media/assets/${a.immichAssetId}/view?size=fullsize`,
     );
+    if (drawId !== generation) return;
     if (!response.ok) {
       toast("大图加载失败");
       return;
     }
     const url = URL.createObjectURL(await response.blob());
-    state.galleryUrls.push(url);
+    if (drawId !== generation) { URL.revokeObjectURL(url); return; }
+    activeUrl = url;
     const media = overlay.querySelector(
       a.assetType === "VIDEO" ? "video" : "img",
     );
     media.src = url;
-    let startX = 0;
-    overlay.querySelector(".gallery").ontouchstart = (e) =>
-      (startX = e.touches[0].clientX);
-    overlay.querySelector(".gallery").ontouchend = (e) => {
-      const dx = e.changedTouches[0].clientX - startX;
-      if (Math.abs(dx) > 60) {
-        current = (current + (dx < 0 ? 1 : -1) + assets.length) % assets.length;
-        draw();
-      } else onClose();
+    if (a.assetType === "VIDEO") return;
+    let scale = 1, x = 0, y = 0, startX = 0, startY = 0, pinchDistance = 0, pinched = false;
+    const paint = () => { media.style.transform = `translate(${x}px, ${y}px) scale(${scale})`; };
+    gallery.ontouchstart = (event) => {
+      if (event.touches.length === 2) {
+        pinched = true;
+        pinchDistance = Math.hypot(event.touches[0].clientX - event.touches[1].clientX, event.touches[0].clientY - event.touches[1].clientY);
+      } else if (event.touches.length === 1) {
+        startX = event.touches[0].clientX;
+        startY = event.touches[0].clientY;
+      }
+    };
+    gallery.ontouchmove = (event) => {
+      if (event.touches.length === 2 && pinchDistance) {
+        event.preventDefault();
+        const distance = Math.hypot(event.touches[0].clientX - event.touches[1].clientX, event.touches[0].clientY - event.touches[1].clientY);
+        scale = Math.max(1, Math.min(5, scale * distance / pinchDistance));
+        pinchDistance = distance;
+        if (scale === 1) x = y = 0;
+        paint();
+      } else if (event.touches.length === 1 && scale > 1) {
+        event.preventDefault();
+        x += event.touches[0].clientX - startX;
+        y += event.touches[0].clientY - startY;
+        startX = event.touches[0].clientX;
+        startY = event.touches[0].clientY;
+        paint();
+      }
+    };
+    gallery.ontouchend = (event) => {
+      if (event.touches.length) return;
+      pinchDistance = 0;
+      if (pinched || event.target.closest("button")) { pinched = false; return; }
+      if (scale > 1) return;
+      const dx = event.changedTouches[0].clientX - startX;
+      if (Math.abs(dx) > 60) move(dx < 0 ? 1 : -1);
     };
   };
   draw();

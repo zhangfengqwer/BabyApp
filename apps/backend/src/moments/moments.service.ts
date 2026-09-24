@@ -1,11 +1,12 @@
-import { ForbiddenException, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException, BadRequestException, ConflictException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ImmichService } from '../immich/immich.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { MomentEditDto } from './moments.controller';
 
 @Injectable()
 export class MomentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly immich: ImmichService) {}
   async accessible(user: AuthenticatedUser, id: string, edit = false) {
     const moment = await this.prisma.moment.findUnique({
       where: { id }, include: { baby: { include: { familyMembers: true } }, assets: true },
@@ -53,15 +54,41 @@ export class MomentsService {
     return this.detail(user,id);
   }
   async remove(user: AuthenticatedUser,id: string) {
-    await this.accessible(user,id,true);
-    await this.prisma.moment.delete({where:{id}});
+    const moment = await this.accessible(user,id,true);
+    await this.deleteOriginals(moment.assets);
+    try { await this.prisma.moment.delete({where:{id}}); }
+    catch { throw new InternalServerErrorException('服务器原件已进入回收站，但记录同步失败，请联系管理员处理'); }
     return {success:true,data:null};
   }
   async removeAsset(user: AuthenticatedUser, id: string, assetId: string) {
-    await this.accessible(user, id, true);
-    // Remove only this business association; never delete the original Immich media.
-    await this.prisma.momentAsset.deleteMany({ where: { id: assetId, momentId: id } });
+    return this.removeAssets(user, id, [assetId]);
+  }
+  async removeAssets(user: AuthenticatedUser, id: string, assetIds: string[]) {
+    const moment = await this.accessible(user, id, true);
+    const uniqueIds = [...new Set(assetIds)];
+    if (!uniqueIds.length || uniqueIds.some(assetId => !moment.assets.some(asset => asset.id === assetId))) {
+      throw new BadRequestException('只能删除这条记录中的媒体');
+    }
+    const selected = moment.assets.filter(asset => uniqueIds.includes(asset.id));
+    await this.deleteOriginals(selected);
+    try { await this.prisma.momentAsset.deleteMany({ where: { momentId: id, id: { in: uniqueIds } } }); }
+    catch { throw new InternalServerErrorException('服务器原件已进入回收站，但记录同步失败，请联系管理员处理'); }
     return { success: true, data: null };
+  }
+  private async deleteOriginals(assets: { id: string; immichAssetId: string }[]) {
+    if (!assets.length) return;
+    const linkIds = assets.map(asset => asset.id);
+    const originalIds = [...new Set(assets.map(asset => asset.immichAssetId))];
+    const [otherMoment, babyAvatar, milestoneCover, userAvatar] = await Promise.all([
+      this.prisma.momentAsset.findFirst({ where: { immichAssetId: { in: originalIds }, id: { notIn: linkIds } }, select: { id: true } }),
+      this.prisma.baby.findFirst({ where: { avatarAssetId: { in: originalIds } }, select: { id: true } }),
+      this.prisma.milestone.findFirst({ where: { coverAssetId: { in: originalIds } }, select: { id: true } }),
+      this.prisma.user.findFirst({ where: { avatar: { in: originalIds } }, select: { id: true } }),
+    ]);
+    if (otherMoment || babyAvatar || milestoneCover || userAvatar) {
+      throw new ConflictException('选中的原件仍被其他记录或头像使用，请先移除其他引用');
+    }
+    await this.immich.deleteAssets(originalIds);
   }
   async comments(user: AuthenticatedUser,id: string,cursor?: string) {
     const moment = await this.accessible(user,id);

@@ -8,6 +8,6 @@ import { ImmichService } from './immich.service';
   imports: [HttpModule, AuthModule],
   controllers: [ImmichController],
   providers: [ImmichService],
+  exports: [ImmichService],
 })
 export class ImmichModule {}
-
